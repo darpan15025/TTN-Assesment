@@ -1,0 +1,9 @@
+# QA Assessment Rules
+
+- Use Playwright with PrismStructure (Page Object Model) for all automation.
+- Keep manual, UI, and API test cases between 5-8 each, tagged @Smoke or @regression.
+- Generate unique test data per run to avoid account lockouts.
+- Press Confirm twice on checkout to generate invoice.
+- Document all AI prompts in ai-prompts/ folder.
+- Commit iteratively — do not push everything in a single commit.
+- All test execution reports must show Passed status.
