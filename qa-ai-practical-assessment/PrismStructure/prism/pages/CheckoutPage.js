@@ -35,13 +35,45 @@ class CheckoutPage extends BasePage {
     await this.countrySelect.waitFor({ state: 'visible', timeout: 15000 });
     await this.countrySelect.selectOption(data.country);
     await this.postalCodeInput.fill(data.postalCode);
-    if (await this.houseNumberInput.isVisible().catch(() => false)) {
-      await this.houseNumberInput.fill(data.houseNumber);
+
+    const start = Date.now();
+    while (Date.now() - start < 25000) {
+      if (await this.houseNumberInput.isVisible().catch(() => false)) {
+        await this.houseNumberInput.fill(data.houseNumber);
+      }
+
+      const streetValue = await this.streetInput.inputValue().catch(() => '');
+      if (!streetValue) {
+        await this.streetInput.fill(data.street);
+      }
+      const cityValue = await this.cityInput.inputValue().catch(() => '');
+      if (!cityValue) {
+        await this.cityInput.fill(data.city);
+      }
+      const stateValue = await this.stateInput.inputValue().catch(() => '');
+      if (!stateValue) {
+        await this.stateInput.fill(data.state);
+      }
+
+      // Require two consecutive enabled reads to avoid postcode-lookup races.
+      const enabledOnce = await this.proceedBilling.isEnabled().catch(() => false);
+      await this.page.waitForTimeout(300);
+      if (await this.houseNumberInput.isVisible().catch(() => false)) {
+        const houseValue = await this.houseNumberInput.inputValue().catch(() => '');
+        if (houseValue !== data.houseNumber) {
+          await this.houseNumberInput.fill(data.houseNumber);
+          await this.page.waitForTimeout(200);
+        }
+      }
+      const enabledTwice = await this.proceedBilling.isEnabled().catch(() => false);
+      if (enabledOnce && enabledTwice) {
+        await this.proceedBilling.click({ force: true });
+        return;
+      }
+      await this.page.waitForTimeout(400);
     }
-    await this.streetInput.fill(data.street);
-    await this.cityInput.fill(data.city);
-    await this.stateInput.fill(data.state);
-    await this.proceedBilling.click();
+
+    throw new Error('Billing proceed button remained disabled after filling required fields');
   }
 
   async selectCashOnDelivery() {
@@ -51,10 +83,39 @@ class CheckoutPage extends BasePage {
 
   async completeOrder() {
     await this.confirmButton.waitFor({ state: 'visible', timeout: 15000 });
+    await this.waitForEnabled(this.confirmButton);
+
+    const paymentResponse = this.page.waitForResponse(
+      (response) => response.url().includes('/payment/check') && response.status() === 200,
+      { timeout: 20000 }
+    );
     await this.confirmButton.click();
+    await paymentResponse;
     await this.page.getByText(/payment was successful/i).waitFor({ timeout: 15000 });
+    await this.page.waitForTimeout(1000);
+
+    const invoiceResponse = this.page.waitForResponse(
+      (response) => response.url().includes('/invoices') && response.request().method() === 'POST',
+      { timeout: 20000 }
+    );
+    await this.waitForEnabled(this.confirmButton);
     await this.confirmButton.click();
+    const response = await invoiceResponse;
+    if (response.status() !== 201) {
+      throw new Error(`Invoice creation failed with status ${response.status()}: ${await response.text()}`);
+    }
     await this.page.getByText(/thanks for your order|invoice number/i).waitFor({ timeout: 20000 });
+  }
+
+  async waitForEnabled(locator, timeout = 20000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (await locator.isEnabled().catch(() => false)) {
+        return;
+      }
+      await this.page.waitForTimeout(400);
+    }
+    throw new Error(`Locator remained disabled: ${locator}`);
   }
 }
 

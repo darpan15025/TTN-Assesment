@@ -19,7 +19,8 @@ class ProductApi {
   async getFirstProductId() {
     const response = await this.getProducts();
     const body = await response.json();
-    return body.data[0].id;
+    const product = (body.data || []).find((item) => item.in_stock !== false && item.is_rental !== true) || body.data[0];
+    return product.id;
   }
 }
 
