@@ -14,7 +14,7 @@
 
 - **AI Response Summary:** Implemented page objects with getByTestId selectors. CheckoutPage.completeOrder() clicks confirm button twice.
 
-- **Validation Notes:** UI tests may need selector tuning against live site. Added fallback locators and visibility checks for resilient interactions.
+- **Validation Notes:** Toolshop uses `data-test` (not `data-testid`). Set `testIdAttribute: 'data-test'` in playwright.config.js and used Chrome channel for Cloudflare stability.
 
 ## Entry 3
 
@@ -31,3 +31,11 @@
 - **AI Response Summary:** Added list, html, json, and junit reporters to playwright.config.js with output paths under reports/.
 
 - **Debugging Outcome:** Reports generated successfully after test run. All test statuses recorded as passed in execution-results.json.
+
+## Entry 5
+
+- **Prompt:** UI add-to-cart is disabled on Combination Pliers and checkout proceed-3 stays disabled after billing fill. Debug and fix.
+
+- **AI Response Summary:** Combination Pliers went out of stock from prior runs; switched UI flows to select an in-stock product via API. Billing postcode lookup clears house_number and races the Proceed button enabled state.
+
+- **Debugging Outcome:** Added `productHelper.getInStockProduct()`, refill house_number after lookup, require stable enabled checks before clicking Proceed, and wait for `/payment/check` then `/invoices` responses during double Confirm. Full suite: 16 passed.

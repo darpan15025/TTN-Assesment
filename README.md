@@ -7,7 +7,7 @@ This repository contains the QA AI Capability Exercise submission for Practice S
 ```bash
 cd qa-ai-practical-assessment/PrismStructure
 npm install
-npx playwright install chromium
+npx playwright install chrome
 npm test
 ```
 

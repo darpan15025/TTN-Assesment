@@ -2,30 +2,30 @@
 
 ## Entry 1
 
-- **Prompt:** Write readme.md with setup instructions, smoke/regression run commands, and report locations for the QA assessment project.
+- **Prompt:** Write readme.md with setup, smoke/regression commands, and report locations for PrismStructure Playwright project.
 
-- **AI Response Summary:** Generated readme with prerequisites, npm scripts for all test tiers, and report path table.
+- **AI Response Summary:** Produced README covering prerequisites, npm scripts for smoke/regression/UI/API, test data strategy, and report paths.
 
-- **Edits You Made:** Added note about double-confirm invoice and API password requirements.
+- **Edits You Made:** Clarified Chrome channel requirement (`npx playwright install chrome`) and double-confirm invoice note.
 
-- **Reason for Edits:** Assessment-specific behaviors not captured in generic readme template.
+- **Reason for Edits:** Match actual runtime config used to bypass Cloudflare and avoid Chromium-only install instructions.
 
 ## Entry 2
 
-- **Prompt:** Complete project-info.md covering all 10 AI workflow questions from Part A of the assessment.
+- **Prompt:** Summarize project-info.md covering AI workflow questions from Part A of the assessment.
 
-- **AI Response Summary:** Filled all sections: context sharing, requirement analysis, test planning, manual design, automation design, validation, test data, debugging, data privacy, and reuse strategy.
+- **AI Response Summary:** Drafted answers for context-setting, requirement analysis, planning, manual/automation design, validation, test data, debugging, privacy, and reuse.
 
-- **Edits You Made:** Added test coverage summary table and AC mapping table.
+- **Edits You Made:** Added AC mapping table and smoke/regression counts (8 each for manual/UI/API).
 
-- **Reason for Edits:** Evaluators need traceability from requirements to test IDs.
+- **Reason for Edits:** Evaluators expect traceability from AC1/AC2 to test IDs and clear evidence of thoughtful AI use.
 
 ## Entry 3
 
-- **Prompt:** Summarize this chat into ai-prompts format for requirements, test design, test data, automation, and documentation phases.
+- **Prompt:** Update ai-prompts files after debugging stock and billing lookup failures so history reflects iterative development.
 
-- **AI Response Summary:** Created five ai-prompts markdown files with Prompt / AI Response / Validation Notes format per assessment template.
+- **AI Response Summary:** Added automation-and-debugging entries for data-test config, in-stock product selection, and postcode/house_number race.
 
-- **Edits You Made:** Added concrete debugging outcomes and validation notes from actual test execution.
+- **Edits You Made:** Kept prompts short (Caveman style) and recorded validation outcomes with suite result (16 passed).
 
-- **Reason for Edits:** Evidence of iterative prompting and review, not copy-paste of unreviewed AI output.
+- **Reason for Edits:** Assessment grades AI workflow evidence, not only green tests.

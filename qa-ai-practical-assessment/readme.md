@@ -13,13 +13,14 @@
 
 - Node.js 18+
 - npm
+- Google Chrome (Playwright `channel: 'chrome'` is used for UI stability against Cloudflare)
 
 ## Setup
 
 ```bash
 cd PrismStructure
 npm install
-npx playwright install chromium
+npx playwright install chrome
 ```
 
 ## Test Data
