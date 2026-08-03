@@ -1,0 +1,26 @@
+Test ID,Title,Type,Category,Priority,Preconditions,Test Steps,Expected Result,Status
+TC-MAN-001,User registration with valid details,Functional,Positive,@Smoke,User is on registration page,"1. Navigate to /auth/register
+2. Fill all required fields with valid data
+3. Submit registration form",User is registered successfully and redirected to login or home,Passed
+TC-MAN-002,User login with valid credentials,Functional,Positive,@Smoke,User has a registered account,"1. Navigate to /auth/login
+2. Enter valid email and password
+3. Click Login",User is logged in and navigation shows user menu,Passed
+TC-MAN-003,Login with invalid password,Functional,Negative,@regression,User is on login page,"1. Navigate to /auth/login
+2. Enter valid email with wrong password
+3. Click Login",Error message is displayed and user remains on login page,Passed
+TC-MAN-004,Browse products and add to cart,Functional,Positive,@Smoke,User is logged in,"1. Navigate to homepage
+2. Select a product
+3. Click Add to Cart
+4. Open cart/checkout",Product appears in cart with correct name and quantity,Passed
+TC-MAN-005,Update cart quantity,Functional,Positive,@regression,User has item in cart,"1. Navigate to checkout/cart page
+2. Change quantity of cart item
+3. Verify line totals update",Cart reflects updated quantity and totals recalculate,Passed
+TC-MAN-006,Complete checkout with Cash on Delivery,Functional,Positive,@regression,User has items in cart,"1. Proceed to checkout
+2. Fill billing details
+3. Select Cash on Delivery
+4. Press Confirm twice to generate invoice",Order is placed and invoice is generated successfully,Passed
+TC-MAN-007,View invoice in My Invoices,Functional,Positive,@regression,User completed a purchase,"1. Navigate to My Invoices
+2. Locate latest invoice
+3. Open invoice details",Invoice is listed with correct order details and invoice number,Passed
+TC-MAN-008,Profile information verification,Functional,Positive,@regression,User is logged in,"1. Navigate to account profile
+2. Review first name last name and email fields",Profile displays registered user information correctly,Passed

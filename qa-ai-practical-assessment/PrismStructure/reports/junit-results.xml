@@ -1,0 +1,42 @@
+<testsuites id="" name="" tests="16" failures="0" skipped="0" errors="0" time="81.807839">
+<testsuite name="ui/regression.spec.js" timestamp="2026-08-03T05:54:56.000Z" hostname="ui-chromium" tests="5" failures="0" skipped="0" time="53.92" errors="0">
+<testcase name="UI Regression Tests @regression › TC-UI-003 @regression - Add product to cart" classname="ui/regression.spec.js" time="10.377">
+</testcase>
+<testcase name="UI Regression Tests @regression › TC-UI-004 @regression - Update cart item quantity" classname="ui/regression.spec.js" time="11.257">
+</testcase>
+<testcase name="UI Regression Tests @regression › TC-UI-005 @regression - Complete purchase flow with cash on delivery" classname="ui/regression.spec.js" time="14.588">
+</testcase>
+<testcase name="UI Regression Tests @regression › TC-UI-006 @regression - Verify invoice in My Invoices after double confirm" classname="ui/regression.spec.js" time="15.324">
+</testcase>
+<testcase name="UI Regression Tests @regression › TC-UI-007 @regression - Login with invalid credentials shows error" classname="ui/regression.spec.js" time="2.374">
+</testcase>
+</testsuite>
+<testsuite name="ui/smoke.spec.js" timestamp="2026-08-03T05:54:56.000Z" hostname="ui-chromium" tests="3" failures="0" skipped="0" time="12.685" errors="0">
+<testcase name="UI Smoke Tests @Smoke › TC-UI-001 @Smoke - Homepage loads with product list" classname="ui/smoke.spec.js" time="1.877">
+</testcase>
+<testcase name="UI Smoke Tests @Smoke › TC-UI-002 @Smoke - User can register and login" classname="ui/smoke.spec.js" time="3.752">
+</testcase>
+<testcase name="UI Smoke Tests @Smoke › TC-UI-008 @Smoke - User profile displays correct information" classname="ui/smoke.spec.js" time="7.056">
+</testcase>
+</testsuite>
+<testsuite name="api/regression.spec.js" timestamp="2026-08-03T05:54:56.000Z" hostname="api" tests="6" failures="0" skipped="0" time="12.07" errors="0">
+<testcase name="API Regression Tests @regression › TC-API-003 @regression - Create cart with bearer token" classname="api/regression.spec.js" time="1.787">
+</testcase>
+<testcase name="API Regression Tests @regression › TC-API-004 @regression - Retrieve products list" classname="api/regression.spec.js" time="0.501">
+</testcase>
+<testcase name="API Regression Tests @regression › TC-API-005 @regression - Add product to cart" classname="api/regression.spec.js" time="2.773">
+</testcase>
+<testcase name="API Regression Tests @regression › TC-API-006 @regression - Verify cart contents" classname="api/regression.spec.js" time="3.23">
+</testcase>
+<testcase name="API Regression Tests @regression › TC-API-007 @regression - Generate invoice with cash on delivery" classname="api/regression.spec.js" time="3.289">
+</testcase>
+<testcase name="API Regression Tests @regression › TC-API-008 @regression - Login with invalid credentials returns 401" classname="api/regression.spec.js" time="0.49">
+</testcase>
+</testsuite>
+<testsuite name="api/smoke.spec.js" timestamp="2026-08-03T05:54:56.000Z" hostname="api" tests="2" failures="0" skipped="0" time="1.992" errors="0">
+<testcase name="API Smoke Tests @Smoke › TC-API-001 @Smoke - Register new user via API" classname="api/smoke.spec.js" time="0.733">
+</testcase>
+<testcase name="API Smoke Tests @Smoke › TC-API-002 @Smoke - Login and obtain bearer token" classname="api/smoke.spec.js" time="1.259">
+</testcase>
+</testsuite>
+</testsuites>
