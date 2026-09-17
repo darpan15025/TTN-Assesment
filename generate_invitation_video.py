@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a rich single-frame Ring Ceremony invitation video."""
+"""Premium animated Ring Ceremony invitation video — single view."""
 
 from __future__ import annotations
 
@@ -15,15 +15,14 @@ from moviepy import AudioFileClip, VideoClip
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "assets"
 FONTS = ASSETS / "fonts"
-INVITATION_IMAGE = ASSETS / "invitation_source.jpg"
 OUTPUT_DIR = ROOT / "output"
 OUTPUT_VIDEO = OUTPUT_DIR / "ring_ceremony_invitation.mp4"
 OUTPUT_MOBILE = OUTPUT_DIR / "ring_ceremony_invitation_mobile.mp4"
 BG_MUSIC = ASSETS / "bg_music.wav"
 
 WIDTH, HEIGHT = 1080, 1920
-FPS = 24
-DURATION = 20.0
+FPS = 30
+DURATION = 24.0
 
 MAROON = (92, 18, 38)
 MAROON_LIGHT = (123, 30, 58)
@@ -35,6 +34,9 @@ ROSE_PALE = (220, 120, 130)
 CREAM = (245, 232, 210)
 TEXT_DARK = (74, 34, 34)
 TEXT_MUTED = (110, 72, 72)
+
+PANEL = (58, 140, WIDTH - 58, HEIGHT - 140)
+PANEL_W = PANEL[2] - PANEL[0]
 
 FONT_MAP = {
     "great-vibes": "GreatVibes-Regular.ttf",
@@ -48,461 +50,486 @@ def load_font(key: str, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(FONTS / FONT_MAP[key]), size)
 
 
-def clamp01(value: float) -> float:
-    return max(0.0, min(1.0, value))
-
-
-def ease_out_cubic(t: float) -> float:
-    return 1 - (1 - t) ** 3
+def clamp01(v: float) -> float:
+    return max(0.0, min(1.0, v))
 
 
 def lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
-def fit_contain(image: Image.Image, width: int, height: int) -> Image.Image:
-    src_w, src_h = image.size
-    scale = min(width / src_w, height / src_h)
-    new_size = (int(src_w * scale), int(src_h * scale))
-    resized = image.resize(new_size, Image.Resampling.LANCZOS)
-    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    canvas.paste(resized, ((width - new_size[0]) // 2, (height - new_size[1]) // 2))
-    return canvas
+def ease_out_cubic(t: float) -> float:
+    return 1 - (1 - t) ** 3
 
 
-def build_particles(seed: int = 11) -> tuple[list[dict], list[dict], list[dict]]:
-    rng = random.Random(seed)
-    petals, bokeh, sparkles = [], [], []
-    for _ in range(36):
+def ease_out_back(t: float) -> float:
+    c1, c3 = 1.70158, 2.70158
+    return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2
+
+
+def ease_out_elastic(t: float) -> float:
+    if t in (0, 1):
+        return t
+    return 2 ** (-10 * t) * math.sin((t * 10 - 0.75) * (2 * math.pi) / 3) + 1
+
+
+def segment_progress(t: float, start: float, end: float) -> float:
+    if end <= start:
+        return 1.0 if t >= start else 0.0
+    return clamp01((t - start) / (end - start))
+
+
+FONTS_CACHE = {
+    "om": ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSerifDevanagari-Bold.ttf", 70),
+    "quote": load_font("cormorant-italic", 26),
+    "intro": load_font("cormorant", 25),
+    "title": load_font("great-vibes", 82),
+    "of": load_font("cinzel", 28),
+    "name": load_font("great-vibes", 68),
+    "amp": load_font("cinzel", 32),
+    "msg": load_font("cormorant-italic", 23),
+    "detail": load_font("cormorant", 21),
+    "label": load_font("cinzel", 18),
+    "close": load_font("cormorant", 25),
+    "sign": load_font("cormorant-italic", 23),
+    "family": load_font("great-vibes", 50),
+}
+
+
+def build_particles() -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    rng = random.Random(42)
+    petals, bokeh, sparkles, embers = [], [], [], []
+    for _ in range(55):
         petals.append(
             {
-                "x": rng.uniform(0.0, 1.0),
-                "y": rng.uniform(-0.2, 1.1),
-                "size": rng.uniform(8, 18),
-                "speed": rng.uniform(0.02, 0.06),
-                "sway": rng.uniform(0.5, 1.5),
+                "x": rng.uniform(0, 1),
+                "y": rng.uniform(-0.3, 1.1),
+                "size": rng.uniform(7, 20),
+                "speed": rng.uniform(0.025, 0.07),
+                "sway": rng.uniform(0.6, 1.8),
                 "phase": rng.uniform(0, math.tau),
-                "color": rng.choice([ROSE, ROSE_PALE, GOLD_PALE, CREAM, (255, 210, 210)]),
+                "color": rng.choice([ROSE, ROSE_PALE, GOLD_PALE, CREAM, (255, 200, 200)]),
             }
         )
-    for _ in range(22):
+    for _ in range(30):
         bokeh.append(
             {
-                "x": rng.uniform(0.03, 0.97),
-                "y": rng.uniform(0.03, 0.97),
-                "radius": rng.uniform(16, 52),
+                "x": rng.uniform(0.02, 0.98),
+                "y": rng.uniform(0.02, 0.98),
+                "r": rng.uniform(14, 58),
                 "phase": rng.uniform(0, math.tau),
-                "speed": rng.uniform(0.6, 1.4),
+                "speed": rng.uniform(0.7, 1.8),
             }
         )
-    for _ in range(90):
+    for _ in range(110):
         sparkles.append(
             {
-                "x": rng.uniform(0.0, 1.0),
-                "y": rng.uniform(0.0, 1.0),
-                "size": rng.uniform(2, 5),
+                "x": rng.uniform(0, 1),
+                "y": rng.uniform(0, 1),
+                "size": rng.uniform(1.5, 5),
                 "phase": rng.uniform(0, math.tau),
-                "speed": rng.uniform(1.0, 3.0),
+                "speed": rng.uniform(1.2, 3.5),
             }
         )
-    return petals, bokeh, sparkles
+    for _ in range(40):
+        embers.append(
+            {
+                "x": rng.uniform(0.1, 0.9),
+                "y": rng.uniform(0.5, 1.1),
+                "speed": rng.uniform(0.03, 0.09),
+                "size": rng.uniform(2, 5),
+                "phase": rng.uniform(0, math.tau),
+            }
+        )
+    return petals, bokeh, sparkles, embers
+
+
+PETALS, BOKEH, SPARKLES, EMBERS = build_particles()
 
 
 def create_static_backdrop() -> Image.Image:
-    gradient = Image.new("RGB", (WIDTH, HEIGHT), MAROON)
-    draw = ImageDraw.Draw(gradient)
-    for y in range(0, HEIGHT, 2):
+    img = Image.new("RGB", (WIDTH, HEIGHT), MAROON)
+    draw = ImageDraw.Draw(img)
+    for y in range(0, HEIGHT, 3):
         blend = y / HEIGHT
-        r = int(lerp(MAROON[0], MAROON_LIGHT[0], blend * 0.55))
-        g = int(lerp(MAROON[1], MAROON_LIGHT[1], blend * 0.55))
-        b = int(lerp(MAROON[2], MAROON_LIGHT[2], blend * 0.55))
-        draw.rectangle((0, y, WIDTH, y + 2), fill=(r, g, b))
-
+        r = int(lerp(MAROON[0], MAROON_LIGHT[0], blend * 0.6))
+        g = int(lerp(MAROON[1], MAROON_LIGHT[1], blend * 0.6))
+        b = int(lerp(MAROON[2], MAROON_LIGHT[2], blend * 0.6))
+        draw.rectangle((0, y, WIDTH, y + 3), fill=(r, g, b))
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    tile = 80
-    for y in range(0, HEIGHT, tile):
-        for x in range(0, WIDTH, tile):
-            cx, cy = x + tile // 2, y + tile // 2
-            draw.pieslice((cx - 24, cy - 24, cx + 24, cy + 24), 210, 330, fill=(*GOLD, 18))
-            draw.ellipse((cx - 8, cy - 8, cx + 8, cy + 8), fill=(*GOLD_LIGHT, 12))
-
-    for i in range(8):
-        inset = 18 + i * 4
-        draw.rounded_rectangle(
+    od = ImageDraw.Draw(overlay)
+    for i in range(9):
+        inset = 14 + i * 4
+        od.rounded_rectangle(
             (inset, inset, WIDTH - inset, HEIGHT - inset),
-            radius=34,
-            outline=(*GOLD, 130 - i * 12),
+            radius=36,
+            outline=(*GOLD, 135 - i * 12),
             width=2,
         )
-
-    glow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    glow_draw = ImageDraw.Draw(glow)
-    glow_draw.ellipse((WIDTH // 2 - 420, 80, WIDTH // 2 + 420, 420), fill=(*GOLD, 45))
-    glow_draw.ellipse((WIDTH // 2 - 380, HEIGHT - 500, WIDTH // 2 + 380, HEIGHT - 120), fill=(*GOLD_LIGHT, 35))
-    glow = glow.filter(ImageFilter.GaussianBlur(radius=30))
-
-    base = gradient.convert("RGBA")
-    base = Image.alpha_composite(base, overlay)
-    base = Image.alpha_composite(base, glow)
-    return base
+    return Image.alpha_composite(img.convert("RGBA"), overlay)
 
 
-PETALS, BOKEH, SPARKLES = build_particles()
 STATIC_BACKDROP = create_static_backdrop()
-OM_FONT = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSerifDevanagari-Bold.ttf", 72)
 
 
-def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    words = text.split()
-    lines: list[str] = []
-    current = ""
+def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
+    words, lines, cur = text.split(), [], ""
     for word in words:
-        candidate = f"{current} {word}".strip()
-        if font.getbbox(candidate)[2] - font.getbbox(candidate)[0] <= max_width:
-            current = candidate
+        cand = f"{cur} {word}".strip()
+        if font.getbbox(cand)[2] - font.getbbox(cand)[0] <= max_w:
+            cur = cand
         else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
+            if cur:
+                lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
     return lines
 
 
-def draw_centered_text(
+def text_size(text: str, font: ImageFont.FreeTypeFont) -> tuple[int, int]:
+    bb = font.getbbox(text)
+    return bb[2] - bb[0], bb[3] - bb[1]
+
+
+def draw_rotating_mandala(base: Image.Image, t: float) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    cx, cy = WIDTH // 2, HEIGHT // 2 - 40
+    for ring in range(4):
+        radius = 280 + ring * 90
+        start = math.degrees(t * (12 + ring * 4))
+        for i in range(16):
+            a1 = math.radians(start + i * 22.5)
+            a2 = math.radians(start + i * 22.5 + 14)
+            x1, y1 = cx + math.cos(a1) * radius, cy + math.sin(a1) * radius
+            x2, y2 = cx + math.cos(a2) * radius, cy + math.sin(a2) * radius
+            draw.line([(x1, y1), (x2, y2)], fill=(*GOLD, 22 - ring * 3), width=3)
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=1.5))
+    return Image.alpha_composite(base, layer)
+
+
+def draw_light_burst(base: Image.Image, t: float, intro: float) -> Image.Image:
+    if intro <= 0:
+        return base
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    alpha = int(90 * (1 - intro) * intro * 4)
+    draw.ellipse((WIDTH // 2 - 500, 40, WIDTH // 2 + 500, 700), fill=(*GOLD_LIGHT, alpha))
+    for i in range(16):
+        ang = math.radians(-90 + i * 11 + t * 8)
+        end = (WIDTH // 2 + math.cos(ang) * 900, math.sin(ang) * 900)
+        draw.line([(WIDTH // 2, 0), end], fill=(*GOLD_PALE, int(alpha * 0.5)), width=6)
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=12))
+    return Image.alpha_composite(base, layer)
+
+
+def draw_corner_roses(base: Image.Image, t: float) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for idx, (cx, cy) in enumerate([(64, 88), (WIDTH - 64, 88), (64, HEIGHT - 96), (WIDTH - 64, HEIGHT - 96)]):
+        sway = math.sin(t * 1.6 + idx) * 6
+        bloom = 0.7 + 0.3 * math.sin(t * 1.2 + idx)
+        for r in range(7):
+            ang = math.radians(r * 52 + idx * 20 + t * 18)
+            x = cx + math.cos(ang) * (22 + r * 5) * bloom + sway
+            y = cy + math.sin(ang) * (18 + r * 4) * bloom
+            sz = int((13 - r) * bloom)
+            draw.ellipse((x - sz, y - sz, x + sz, y + sz), fill=(*ROSE, 215))
+            draw.ellipse((x - sz // 2, y - sz // 2, x + sz // 2, y + sz // 2), fill=(*ROSE_PALE, 180))
+    return Image.alpha_composite(base, layer)
+
+
+def draw_hanging_bells(base: Image.Image, t: float) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for side in (-1, 1):
+        ax = WIDTH // 2 + side * 430
+        for i in range(5):
+            swing = math.sin(t * 2.4 + i * 0.65) * 11
+            x, y = ax + swing, 108 + i * 42
+            draw.line([(ax, 82 if i == 0 else y - 16), (x, y - 6)], fill=(*GOLD, 220), width=2)
+            draw.ellipse((x - 11, y - 8, x + 11, y + 12), fill=(*GOLD_LIGHT, 240))
+            draw.arc((x - 9, y + 2, x + 9, y + 18), 190, 350, fill=(*GOLD, 255), width=2)
+    return Image.alpha_composite(base, layer)
+
+
+def draw_ambient_fx(base: Image.Image, t: float, reveal: float) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+
+    for b in BOKEH:
+        tw = 0.4 + 0.6 * abs(math.sin(t * b["speed"] + b["phase"]))
+        r = b["r"] * (0.85 + 0.3 * tw)
+        x = b["x"] * WIDTH + math.sin(t * 0.8 + b["phase"]) * 16
+        y = b["y"] * HEIGHT + math.cos(t * 0.7 + b["phase"]) * 16
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=(*GOLD_LIGHT, int(50 * tw * reveal)))
+
+    for p in PETALS:
+        y = (p["y"] + t * p["speed"]) % 1.25 - 0.12
+        x = p["x"] * WIDTH + math.sin(t * p["sway"] + p["phase"]) * 42
+        a = int(195 * reveal)
+        s = p["size"]
+        draw.ellipse((x - s, y * HEIGHT - s * 0.5, x + s, y * HEIGHT + s * 0.5), fill=(*p["color"], a))
+
+    for e in EMBERS:
+        y = 1.0 - ((1.0 - e["y"] + t * e["speed"]) % 1.0)
+        x = e["x"] * WIDTH + math.sin(t * 3 + e["phase"]) * 20
+        a = int(200 * abs(math.sin(t * 4 + e["phase"])) * reveal)
+        s = e["size"]
+        draw.ellipse((x, y * HEIGHT, x + s, y * HEIGHT + s * 1.8), fill=(*GOLD, a))
+
+    for s in SPARKLES:
+        tw = abs(math.sin(t * s["speed"] + s["phase"])) ** 1.8
+        a = int(240 * tw * reveal)
+        if a < 20:
+            continue
+        x = s["x"] * WIDTH + math.sin(t + s["phase"]) * 8
+        y = s["y"] * HEIGHT + math.cos(t * 1.3 + s["phase"]) * 8
+        sz = s["size"] * (1.3 + tw)
+        if tw > 0.72:
+            draw.line([(x - sz, y), (x + sz, y)], fill=(*GOLD_PALE, a), width=2)
+            draw.line([(x, y - sz), (x, y + sz)], fill=(*GOLD_PALE, a), width=2)
+        draw.ellipse((x, y, x + sz * 0.5, y + sz * 0.5), fill=(*GOLD, a))
+
+    sx = int((t * 160) % (WIDTH + 600)) - 300
+    for off in range(-110, 150, 14):
+        draw.polygon(
+            [(sx + off, 0), (sx + off + 50, 0), (sx + off + 210, HEIGHT), (sx + off + 90, HEIGHT)],
+            fill=(*GOLD_PALE, int(36 * reveal)),
+        )
+
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=1.2))
+    return Image.alpha_composite(base, layer)
+
+
+def draw_animated_rings(base: Image.Image, cx: int, cy: int, t: float, alpha: int) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    rot = t * 18
+    for i, (ox, oy, r) in enumerate([(0, 0, 36), (18, -12, 32)]):
+        angle = math.radians(rot + i * 28)
+        rcx = cx + math.cos(angle) * 4
+        rcy = cy + math.sin(angle) * 3
+        draw.ellipse((rcx + ox - r, rcy + oy - r, rcx + ox + r, rcy + oy + r), outline=(*GOLD, alpha), width=4)
+        pulse = int(alpha * (0.5 + 0.5 * math.sin(t * 4 + i)))
+        draw.ellipse((rcx + ox - r - 6, rcy + oy - r - 6, rcx + ox + r + 6, rcy + oy + r + 6), outline=(*GOLD_LIGHT, pulse), width=1)
+    return Image.alpha_composite(base, layer)
+
+
+def draw_hero_glow(base: Image.Image, top: int, bottom: int, t: float, strength: float) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    pulse = 0.55 + 0.45 * math.sin(t * 2.8)
+    alpha = int(55 * strength * pulse)
+    draw.rounded_rectangle(
+        (PANEL[0] + 40, top - 20, PANEL[2] - 40, bottom + 24),
+        radius=40,
+        fill=(*GOLD, alpha),
+    )
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=22))
+    return Image.alpha_composite(base, layer)
+
+
+def anim_alpha(prog: float, delay: float = 0.0, duration: float = 0.5) -> int:
+    p = segment_progress(prog, delay, delay + duration)
+    return int(255 * ease_out_cubic(p))
+
+
+def anim_offset(prog: float, delay: float, duration: float, distance: float = 40) -> float:
+    p = segment_progress(prog, delay, delay + duration)
+    return (1 - ease_out_back(p)) * distance
+
+
+def anim_scale(prog: float, delay: float, duration: float) -> float:
+    p = segment_progress(prog, delay, delay + duration)
+    return 0.82 + 0.18 * ease_out_elastic(p)
+
+
+def draw_text_centered(
     draw: ImageDraw.ImageDraw,
     text: str,
     y: int,
     font: ImageFont.FreeTypeFont,
     fill: tuple[int, int, int, int],
-    panel_left: int,
-    panel_width: int,
-) -> int:
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    x = panel_left + (panel_width - tw) // 2
+) -> tuple[int, int, int, int]:
+    tw, th = text_size(text, font)
+    x = PANEL[0] + (PANEL_W - tw) // 2
     draw.text((x, y), text, font=font, fill=fill)
-    return y + th
+    return x, y, x + tw, y + th
 
 
-def draw_centered_lines(
-    draw: ImageDraw.ImageDraw,
-    lines: list[str],
-    y: int,
-    font: ImageFont.FreeTypeFont,
-    fill: tuple[int, int, int, int],
-    panel_left: int,
-    panel_width: int,
-    spacing: float = 1.35,
-) -> int:
-    line_h = int((font.getbbox("Ay")[3] - font.getbbox("Ay")[1]) * spacing)
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        tw = bbox[2] - bbox[0]
-        x = panel_left + (panel_width - tw) // 2
-        draw.text((x, y), line, font=font, fill=fill)
-        y += line_h
-    return y
+def draw_invitation_panel(t: float) -> Image.Image:
+    prog = clamp01(t / DURATION)
+    intro = segment_progress(prog, 0.0, 0.18)
+    panel_in = segment_progress(prog, 0.08, 0.28)
+    hero_in = segment_progress(prog, 0.22, 0.42)
+    details_in = segment_progress(prog, 0.42, 0.62)
+    rest_in = segment_progress(prog, 0.52, 0.72)
 
+    panel_scale = 0.88 + 0.12 * ease_out_back(panel_in)
+    panel_alpha = int(250 * ease_out_cubic(panel_in))
+    panel_dy = int((1 - ease_out_back(panel_in)) * 80)
 
-def draw_invitation_panel(t: float, progress: float) -> Image.Image:
-    panel_left, panel_top = 72, 210
-    panel_right, panel_bottom = WIDTH - 72, HEIGHT - 210
-    panel_width = panel_right - panel_left
+    pl, pt, pr, pb = PANEL
+    pcx, pcy = (pl + pr) // 2, (pt + pb) // 2
+    pw, ph = int((pr - pl) * panel_scale), int((pb - pt) * panel_scale)
+    prc = (pcx - pw // 2, pcy - ph // 2 + panel_dy, pcx + pw // 2, pcy + ph // 2 + panel_dy)
 
     layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     shadow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.rounded_rectangle(
-        (panel_left + 8, panel_top + 14, panel_right + 8, panel_bottom + 14),
-        radius=34,
-        fill=(20, 0, 8, 130),
+    ImageDraw.Draw(shadow).rounded_rectangle(
+        (prc[0] + 10, prc[1] + 18, prc[2] + 10, prc[3] + 18), radius=34, fill=(15, 0, 6, 140)
     )
-    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=14))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
     layer = Image.alpha_composite(layer, shadow)
 
-    panel = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    panel_draw = ImageDraw.Draw(panel)
-    panel_alpha = int(245 * ease_out_cubic(min(1.0, progress * 2.5)))
-    panel_draw.rounded_rectangle(
-        (panel_left, panel_top, panel_right, panel_bottom),
-        radius=34,
-        fill=(*CREAM, panel_alpha),
-    )
-    glow_alpha = int(180 + 45 * math.sin(t * 2))
-    panel_draw.rounded_rectangle(
-        (panel_left + 14, panel_top + 14, panel_right - 14, panel_bottom - 14),
+    panel_img = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(panel_img)
+    pd.rounded_rectangle(prc, radius=34, fill=(*CREAM, panel_alpha))
+    border_pulse = int(170 + 60 * math.sin(t * 2.2))
+    pd.rounded_rectangle(
+        (prc[0] + 12, prc[1] + 12, prc[2] - 12, prc[3] - 12),
         radius=28,
-        outline=(*GOLD, glow_alpha),
-        width=3,
+        outline=(*GOLD, border_pulse),
+        width=4,
     )
-    layer = Image.alpha_composite(layer, panel)
+    # animated corner sparks
+    for corner in ((prc[0] + 20, prc[1] + 20), (prc[2] - 20, prc[1] + 20), (prc[0] + 20, prc[3] - 20), (prc[2] - 20, prc[3] - 20)):
+        spark_a = int(180 * abs(math.sin(t * 3 + corner[0])))
+        pd.ellipse((corner[0] - 6, corner[1] - 6, corner[0] + 6, corner[1] + 6), fill=(*GOLD_LIGHT, spark_a))
+    layer = Image.alpha_composite(layer, panel_img)
+
+    if panel_in < 0.05:
+        return layer
 
     content = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(content)
-    text_alpha = int(255 * ease_out_cubic(min(1.0, progress * 2.2)))
-    y = panel_top + 36
+    y = prc[1] + 34
 
-    om_bbox = draw.textbbox((0, 0), "ॐ", font=OM_FONT)
-    om_x = panel_left + (panel_width - (om_bbox[2] - om_bbox[0])) // 2
-    draw.text((om_x, y), "ॐ", font=OM_FONT, fill=(*GOLD, text_alpha))
-    y += 82
+    om_a = anim_alpha(prog, 0.12, 0.35)
+    otw, oth = text_size("ॐ", FONTS_CACHE["om"])
+    ox = PANEL[0] + (PANEL_W - otw) // 2
+    draw.text((ox, y + anim_offset(prog, 0.12, 0.35, 25)), "ॐ", font=FONTS_CACHE["om"], fill=(*GOLD, om_a))
+    y += 78
 
-    quote_font = load_font("cormorant-italic", 30)
-    y = draw_centered_lines(
-        draw,
-        wrap_text("Two hearts, one journey, a lifetime of togetherness...", quote_font, panel_width - 80),
-        y,
-        quote_font,
-        (*TEXT_MUTED, text_alpha),
-        panel_left,
-        panel_width,
-        1.3,
+    qa = anim_alpha(prog, 0.14, 0.38)
+    y = y + int(anim_offset(prog, 0.14, 0.38, 20))
+    for line in wrap_text("Two hearts, one journey, a lifetime of togetherness...", FONTS_CACHE["quote"], PANEL_W - 70):
+        tw, th = text_size(line, FONTS_CACHE["quote"])
+        draw.text((PANEL[0] + (PANEL_W - tw) // 2, y), line, font=FONTS_CACHE["quote"], fill=(*TEXT_MUTED, qa))
+        y += th + 4
+    y += 12
+
+    ia = anim_alpha(prog, 0.16, 0.38)
+    for line in wrap_text("With the blessings of our families, we cordially invite you to the", FONTS_CACHE["intro"], PANEL_W - 70):
+        tw, th = text_size(line, FONTS_CACHE["intro"])
+        draw.text((PANEL[0] + (PANEL_W - tw) // 2, y + int(anim_offset(prog, 0.16, 0.38, 18))), line, font=FONTS_CACHE["intro"], fill=(*TEXT_DARK, ia))
+        y += th + 3
+    y += 8
+
+    hero_top = y
+    hero_a = anim_alpha(prog, 0.22, 0.38)
+    hero_dy = int(anim_offset(prog, 0.22, 0.38, 45))
+
+    title_bb = draw_text_centered(
+        draw, "Ring Ceremony", y + hero_dy, FONTS_CACHE["title"], (*MAROON_LIGHT, hero_a),
     )
-    y += 18
+    y = title_bb[3] + 4
 
-    intro_font = load_font("cormorant", 28)
-    y = draw_centered_lines(
-        draw,
-        wrap_text(
-            "With the blessings of our families, we cordially invite you to the",
-            intro_font,
-            panel_width - 80,
-        ),
-        y,
-        intro_font,
-        (*TEXT_DARK, text_alpha),
-        panel_left,
-        panel_width,
-        1.28,
+    sweep_w = int((PANEL_W - 140) * segment_progress(prog, 0.28, 0.48))
+    if sweep_w > 0:
+        sx = PANEL[0] + (PANEL_W - sweep_w) // 2
+        draw.rounded_rectangle((sx, y, sx + sweep_w, y + 4), radius=2, fill=(*GOLD, int(210 * hero_in)))
+    y += 12
+
+    of_bb = draw_text_centered(draw, "of", y + hero_dy // 2, FONTS_CACHE["of"], (*TEXT_DARK, hero_a))
+    y = of_bb[3] + 2
+
+    n1_bb = draw_text_centered(draw, "Tanya Goel", y + hero_dy // 3, FONTS_CACHE["name"], (*MAROON_LIGHT, hero_a))
+    y = n1_bb[3]
+    amp_bb = draw_text_centered(draw, "&", y, FONTS_CACHE["amp"], (*GOLD, hero_a))
+    y = amp_bb[3]
+    n2_bb = draw_text_centered(draw, "Prabhat Goel", y, FONTS_CACHE["name"], (*MAROON_LIGHT, hero_a))
+    hero_bottom = n2_bb[3]
+
+    glow_layer = draw_hero_glow(Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)), hero_top, hero_bottom, t, hero_in)
+    ring_layer = draw_animated_rings(
+        Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)),
+        WIDTH // 2 + 180, hero_top + (hero_bottom - hero_top) // 2, t, int(190 * hero_in),
     )
+    content = Image.alpha_composite(content, glow_layer)
+    content = Image.alpha_composite(content, ring_layer)
+    draw = ImageDraw.Draw(content)
+
+    y = hero_bottom + 12
+    ma = anim_alpha(prog, 0.48, 0.35)
+    for line in wrap_text(
+        "As we begin this beautiful journey of love and togetherness, we would be delighted to have you grace the occasion with your presence and blessings.",
+        FONTS_CACHE["msg"], PANEL_W - 60,
+    ):
+        tw, th = text_size(line, FONTS_CACHE["msg"])
+        draw.text((PANEL[0] + (PANEL_W - tw) // 2, y + int(anim_offset(prog, 0.48, 0.35, 15))), line, font=FONTS_CACHE["msg"], fill=(*TEXT_MUTED, ma))
+        y += th + 3
     y += 10
 
-    title_font = load_font("great-vibes", 88)
-    title_glow = int(40 + 25 * math.sin(t * 2.2))
-    y = draw_centered_text(draw, "Ring Ceremony", y, title_font, (*MAROON_LIGHT, text_alpha), panel_left, panel_width)
-    y += 8
-    draw.rounded_rectangle(
-        (panel_left + 120, y - 4, panel_right - 120, y + 4),
-        radius=4,
-        fill=(*GOLD, title_glow),
-    )
-    y += 18
-
-    of_font = load_font("cinzel", 30)
-    y = draw_centered_text(draw, "of", y, of_font, (*TEXT_DARK, text_alpha), panel_left, panel_width)
-    y += 8
-
-    name_font = load_font("great-vibes", 72)
-    name_pulse = int(255 * (0.92 + 0.08 * math.sin(t * 2.5)))
-    y = draw_centered_text(draw, "Tanya Goel", y, name_font, (*MAROON_LIGHT, min(text_alpha, name_pulse)), panel_left, panel_width)
-    y += 4
-
-    amp_font = load_font("cinzel", 34)
-    y = draw_centered_text(draw, "&", y, amp_font, (*GOLD, text_alpha), panel_left, panel_width)
-    y += 2
-
-    y = draw_centered_text(draw, "Prabhat Goel", y, name_font, (*MAROON_LIGHT, min(text_alpha, name_pulse)), panel_left, panel_width)
-    y += 20
-
-    msg_font = load_font("cormorant-italic", 26)
-    y = draw_centered_lines(
-        draw,
-        wrap_text(
-            "As we begin this beautiful journey of love and togetherness, "
-            "we would be delighted to have you grace the occasion with your presence and blessings.",
-            msg_font,
-            panel_width - 70,
-        ),
-        y,
-        msg_font,
-        (*TEXT_MUTED, text_alpha),
-        panel_left,
-        panel_width,
-        1.32,
-    )
-    y += 16
-
-    detail_font = load_font("cormorant", 24)
-    label_font = load_font("cinzel", 20)
-    col_w = panel_width // 3
-    details = [
-        ("DATE", "Saturday,\n24 October"),
-        ("TIME", "11:00 AM"),
-        ("VENUE", "The Tonight Rooms\nand Party Hall,\nRailway Road, Hapur"),
-    ]
+    col_w = PANEL_W // 3
+    box_y = y
+    box_h = 132
+    details = [("DATE", "Saturday,\n24 October"), ("TIME", "11:00 AM"), ("VENUE", "The Tonight Rooms\nand Party Hall,\nRailway Road, Hapur")]
     for idx, (label, value) in enumerate(details):
-        cx = panel_left + col_w * idx + col_w // 2
-        box_left = panel_left + col_w * idx + 12
-        box_right = panel_left + col_w * (idx + 1) - 12
+        da = anim_alpha(prog, 0.44 + idx * 0.05, 0.3)
+        bx1 = PANEL[0] + col_w * idx + 10
+        bx2 = PANEL[0] + col_w * (idx + 1) - 10
+        pop = 0.9 + 0.1 * ease_out_elastic(segment_progress(prog, 0.44 + idx * 0.05, 0.58))
+        mid_y = box_y + int((1 - pop) * 20)
         draw.rounded_rectangle(
-            (box_left, y, box_right, y + 150),
-            radius=16,
-            fill=(255, 255, 255, int(text_alpha * 0.85)),
-            outline=(*GOLD, int(text_alpha * 0.8)),
+            (bx1, mid_y, bx2, mid_y + box_h),
+            radius=14,
+            fill=(255, 255, 255, int(da * 0.9)),
+            outline=(*GOLD, int(da * 0.85)),
             width=2,
         )
-        label_bbox = draw.textbbox((0, 0), label, font=label_font)
-        draw.text(
-            (cx - (label_bbox[2] - label_bbox[0]) // 2, y + 14),
-            label,
-            font=label_font,
-            fill=(*MAROON_LIGHT, text_alpha),
-        )
-        vy = y + 48
+        cx = (bx1 + bx2) // 2
+        ltw, _ = text_size(label, FONTS_CACHE["label"])
+        draw.text((cx - ltw // 2, mid_y + 10), label, font=FONTS_CACHE["label"], fill=(*MAROON_LIGHT, da))
+        vy = mid_y + 40
         for line in value.split("\n"):
-            bbox = draw.textbbox((0, 0), line, font=detail_font)
-            draw.text(
-                (cx - (bbox[2] - bbox[0]) // 2, vy),
-                line,
-                font=detail_font,
-                fill=(*TEXT_DARK, text_alpha),
-            )
-            vy += 28
+            vtw, vth = text_size(line, FONTS_CACHE["detail"])
+            draw.text((cx - vtw // 2, vy), line, font=FONTS_CACHE["detail"], fill=(*TEXT_DARK, da))
+            vy += 24
 
-    y += 168
-    close_font = load_font("cormorant", 28)
-    y = draw_centered_lines(
-        draw,
-        wrap_text("Your presence will make our celebration even more special.", close_font, panel_width - 70),
-        y,
-        close_font,
-        (*TEXT_DARK, text_alpha),
-        panel_left,
-        panel_width,
-        1.35,
-    )
-    y += 8
-    sign_font = load_font("cormorant-italic", 26)
-    y = draw_centered_text(draw, "With Love,", y, sign_font, (*TEXT_MUTED, text_alpha), panel_left, panel_width)
-    family_font = load_font("great-vibes", 58)
-    draw_centered_text(draw, "Goel Family", y, family_font, (*MAROON_LIGHT, text_alpha), panel_left, panel_width)
+    y = box_y + box_h + 10
+    ca = anim_alpha(prog, 0.58, 0.35)
+    for line in wrap_text("Your presence will make our celebration even more special.", FONTS_CACHE["close"], PANEL_W - 60):
+        tw, th = text_size(line, FONTS_CACHE["close"])
+        draw.text((PANEL[0] + (PANEL_W - tw) // 2, y), line, font=FONTS_CACHE["close"], fill=(*TEXT_DARK, ca))
+        y += th + 3
+    y += 6
+    stw, sth = text_size("With Love,", FONTS_CACHE["sign"])
+    draw.text((PANEL[0] + (PANEL_W - stw) // 2, y), "With Love,", font=FONTS_CACHE["sign"], fill=(*TEXT_MUTED, ca))
+    y += sth + 2
+    draw_text_centered(draw, "Goel Family", y + 18, FONTS_CACHE["family"], (*MAROON_LIGHT, ca))
 
     layer = Image.alpha_composite(layer, content)
     return layer
 
 
-def draw_corner_roses(draw: ImageDraw.ImageDraw, t: float) -> None:
-    corners = [(72, 96), (WIDTH - 72, 96), (72, HEIGHT - 110), (WIDTH - 72, HEIGHT - 110)]
-    for idx, (cx, cy) in enumerate(corners):
-        sway = math.sin(t * 1.5 + idx) * 5
-        for r in range(6):
-            angle = r * 60 + idx * 18 + t * 15
-            rad = math.radians(angle)
-            x = cx + math.cos(rad) * (24 + r * 5) + sway
-            y = cy + math.sin(rad) * (20 + r * 4)
-            size = 14 - r
-            draw.ellipse((x - size, y - size, x + size, y + size), fill=(*ROSE, 210))
-            draw.ellipse((x - size // 2, y - size // 2, x + size // 2, y + size // 2), fill=(*ROSE_PALE, 170))
-
-
-def draw_hanging_bells(draw: ImageDraw.ImageDraw, t: float) -> None:
-    for side in (-1, 1):
-        anchor_x = WIDTH // 2 + side * 420
-        for i in range(4):
-            swing = math.sin(t * 2.2 + i * 0.7) * 9
-            x = anchor_x + swing
-            y = 118 + i * 44
-            draw.line([(anchor_x, 92 if i == 0 else y - 18), (x, y - 8)], fill=(*GOLD, 210), width=2)
-            draw.ellipse((x - 10, y - 8, x + 10, y + 12), fill=(*GOLD_LIGHT, 230))
-            draw.arc((x - 8, y + 2, x + 8, y + 16), 190, 350, fill=(*GOLD, 255), width=2)
-
-
-def draw_light_rays(draw: ImageDraw.ImageDraw, t: float) -> None:
-    origin = (WIDTH // 2, 0)
-    for i in range(12):
-        spread = -48 + i * 8
-        angle = math.radians(-90 + spread + math.sin(t + i) * 3)
-        length = HEIGHT * 0.72
-        end = (origin[0] + math.cos(angle) * length, origin[1] + math.sin(angle) * length)
-        alpha = int(14 + 10 * math.sin(t * 1.5 + i * 0.5))
-        draw.line([origin, end], fill=(*GOLD_PALE, alpha), width=5)
-
-
-def draw_invitation_panel_layer(t: float, progress: float) -> Image.Image:
-    return draw_invitation_panel(t, progress)
-
-
-def draw_foreground(draw: ImageDraw.ImageDraw, t: float, progress: float) -> None:
-    for b in BOKEH:
-        twinkle = 0.45 + 0.55 * abs(math.sin(t * b["speed"] + b["phase"]))
-        radius = b["radius"] * (0.85 + 0.25 * twinkle)
-        x = b["x"] * WIDTH + math.sin(t * 0.7 + b["phase"]) * 12
-        y = b["y"] * HEIGHT + math.cos(t * 0.6 + b["phase"]) * 12
-        alpha = int(55 * twinkle * ease_out_cubic(progress))
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(*GOLD_LIGHT, alpha))
-
-    for petal in PETALS:
-        y = (petal["y"] + t * petal["speed"]) % 1.2 - 0.1
-        x = petal["x"] * WIDTH + math.sin(t * petal["sway"] + petal["phase"]) * 36
-        alpha = int(180 * ease_out_cubic(min(1.0, progress * 1.4)))
-        size = petal["size"]
-        draw.ellipse((x - size, y * HEIGHT - size * 0.5, x + size, y * HEIGHT + size * 0.5), fill=(*petal["color"], alpha))
-        draw.ellipse((x - size * 0.5, y * HEIGHT - size, x + size * 0.5, y * HEIGHT + size), fill=(*petal["color"], int(alpha * 0.8)))
-
-    for sparkle in SPARKLES:
-        twinkle = abs(math.sin(t * sparkle["speed"] + sparkle["phase"])) ** 2
-        alpha = int(230 * twinkle * ease_out_cubic(progress))
-        if alpha < 25:
-            continue
-        x = sparkle["x"] * WIDTH + math.sin(t + sparkle["phase"]) * 6
-        y = sparkle["y"] * HEIGHT + math.cos(t * 1.2 + sparkle["phase"]) * 6
-        size = sparkle["size"] * (1.2 + twinkle)
-        if twinkle > 0.7:
-            draw.line([(x - size, y), (x + size, y)], fill=(*GOLD_PALE, alpha), width=2)
-            draw.line([(x, y - size), (x, y + size)], fill=(*GOLD_PALE, alpha), width=2)
-        draw.ellipse((x, y, x + size * 0.6, y + size * 0.6), fill=(*GOLD, alpha))
-
-    shimmer_x = int((t * 130) % (WIDTH + 500)) - 250
-    for offset in range(-90, 120, 18):
-        alpha = int(32 + 16 * math.sin(t * 2.5))
-        draw.polygon(
-            [
-                (shimmer_x + offset, 0),
-                (shimmer_x + offset + 55, 0),
-                (shimmer_x + offset + 200, HEIGHT),
-                (shimmer_x + offset + 95, HEIGHT),
-            ],
-            fill=(*GOLD_PALE, alpha),
-        )
-
-    diya_x, diya_y = int(WIDTH * 0.16), int(HEIGHT * 0.845)
-    flame_h = 14 + 7 * abs(math.sin(t * 9))
-    draw.ellipse((diya_x - 16, diya_y - 8, diya_x + 16, diya_y + 8), fill=(*GOLD, 190))
-    draw.ellipse((diya_x - 7, diya_y - flame_h - 6, diya_x + 7, diya_y + 3), fill=(255, 190, 60, 230))
-
-    ring_x, ring_y = int(WIDTH * 0.74), int(HEIGHT * 0.825)
-    ring_alpha = int(90 + 110 * (0.5 + 0.5 * math.sin(t * 3)))
-    draw.ellipse((ring_x - 32, ring_y - 32, ring_x + 4, ring_y + 4), outline=(*GOLD, ring_alpha), width=4)
-    draw.ellipse((ring_x - 8, ring_y - 42, ring_x + 28, ring_y - 4), outline=(*GOLD_LIGHT, ring_alpha), width=4)
-
-
 def render_single_frame(t: float) -> np.ndarray:
-    progress = clamp01(t / DURATION)
+    prog = clamp01(t / DURATION)
+    reveal = ease_out_cubic(min(1.0, prog * 1.6))
+    intro = segment_progress(prog, 0.0, 0.2)
+
     frame = STATIC_BACKDROP.copy()
-
-    rays = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw_light_rays(ImageDraw.Draw(rays), t)
-    rays = rays.filter(ImageFilter.GaussianBlur(radius=5))
-    frame = Image.alpha_composite(frame, rays)
-
-    decor = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    decor_draw = ImageDraw.Draw(decor)
-    draw_corner_roses(decor_draw, t)
-    draw_hanging_bells(decor_draw, t)
-    frame = Image.alpha_composite(frame, decor)
-
-    frame = Image.alpha_composite(frame, draw_invitation_panel_layer(t, progress))
-
-    fx = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw_foreground(ImageDraw.Draw(fx), t, progress)
-    fx = fx.filter(ImageFilter.GaussianBlur(radius=1.1))
-    frame = Image.alpha_composite(frame, fx)
+    frame = draw_rotating_mandala(frame, t)
+    frame = draw_light_burst(frame, t, intro)
+    frame = draw_corner_roses(frame, t)
+    frame = draw_hanging_bells(frame, t)
+    frame = Image.alpha_composite(frame, draw_invitation_panel(t))
+    frame = draw_ambient_fx(frame, t, reveal)
 
     vignette = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    ImageDraw.Draw(vignette).rectangle((0, 0, WIDTH, HEIGHT), fill=(35, 8, 18, 34))
+    ImageDraw.Draw(vignette).rectangle((0, 0, WIDTH, HEIGHT), fill=(30, 6, 16, 32))
     frame = Image.alpha_composite(frame, vignette)
     return np.array(frame.convert("RGB"))
 
@@ -510,47 +537,31 @@ def render_single_frame(t: float) -> np.ndarray:
 def generate_background_music() -> None:
     if BG_MUSIC.exists():
         return
+    dur = int(DURATION) + 3
     cmd = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "lavfi",
-        "-i",
-        f"sine=frequency=220:duration={int(DURATION) + 2}",
-        "-af",
-        f"volume=0.06,afade=t=in:st=0:d=2,afade=t=out:st={int(DURATION)-2}:d=2",
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"sine=frequency=196:duration={dur}",
+        "-f", "lavfi", "-i", f"sine=frequency=247:duration={dur}",
+        "-f", "lavfi", "-i", f"sine=frequency=294:duration={dur}",
+        "-filter_complex",
+        f"[0:a][1:a][2:a]amix=inputs=3:duration=longest,volume=0.05,afade=t=in:st=0:d=2.5,afade=t=out:st={int(DURATION)-1}:d=2.5",
         str(BG_MUSIC),
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def compress_mobile(source: Path, target: Path) -> None:
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(source),
-        "-vf",
-        "scale=720:1280:flags=lanczos",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "slow",
-        "-crf",
-        "28",
-        "-maxrate",
-        "2500k",
-        "-bufsize",
-        "5000k",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "96k",
-        "-movflags",
-        "+faststart",
-        str(target),
-    ]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(source),
+            "-vf", "scale=720:1280:flags=lanczos",
+            "-c:v", "libx264", "-preset", "slow", "-crf", "27",
+            "-maxrate", "2800k", "-bufsize", "5600k",
+            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+            str(target),
+        ],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
 
 
 def build_video() -> tuple[Path, Path]:
@@ -560,12 +571,8 @@ def build_video() -> tuple[Path, Path]:
     audio = AudioFileClip(str(BG_MUSIC)).with_duration(DURATION)
     video = video.with_audio(audio)
     video.write_videofile(
-        str(OUTPUT_VIDEO),
-        fps=FPS,
-        codec="libx264",
-        audio_codec="aac",
-        preset="medium",
-        bitrate="6000k",
+        str(OUTPUT_VIDEO), fps=FPS, codec="libx264", audio_codec="aac",
+        preset="medium", bitrate="7000k",
         ffmpeg_params=["-pix_fmt", "yuv420p", "-movflags", "+faststart"],
         logger=None,
     )
