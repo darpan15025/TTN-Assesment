@@ -2,7 +2,7 @@
 
 Generates a cinematic **1080×1920** (portrait) invitation video for the Ring Ceremony of **Tanya Goel** and **Prabhat Goel**.
 
-The video keeps the original invitation artwork in a **single frame** and adds subtle in-frame animation: a slow zoom, golden shimmer, sparkles, and a gentle ring glow.
+The video keeps the invitation card centered in a **single frame**, surrounded by a rich animated backdrop: maroon paisley patterns, corner roses, hanging bells, falling petals, golden bokeh, light rays, shimmer, and a glowing Om symbol.
 
 ## Event Details
 
