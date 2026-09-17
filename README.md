@@ -15,7 +15,18 @@ Generates a cinematic **1080×1920** (portrait) invitation video for the Ring Ce
 The generated video is saved to:
 
 ```
-output/ring_ceremony_invitation.mp4
+output/ring_ceremony_invitation.mp4          # High quality (~39 MB)
+output/ring_ceremony_invitation_mobile.mp4   # Mobile-optimized (~1.3 MB)
+```
+
+To create a smaller mobile-friendly version from the high-quality export:
+
+```bash
+ffmpeg -i output/ring_ceremony_invitation.mp4 \
+  -vf "scale=720:1280:flags=lanczos" \
+  -c:v libx264 -preset slow -crf 28 -maxrate 2500k -bufsize 5000k \
+  -c:a aac -b:a 96k -movflags +faststart \
+  output/ring_ceremony_invitation_mobile.mp4
 ```
 
 ## Requirements
