@@ -2,6 +2,8 @@
 
 Generates a cinematic **1080×1920** (portrait) invitation video for the Ring Ceremony of **Tanya Goel** and **Prabhat Goel**.
 
+The video keeps the original invitation artwork in a **single frame** and adds subtle in-frame animation: a slow zoom, golden shimmer, sparkles, and a gentle ring glow.
+
 ## Event Details
 
 | | |
@@ -46,7 +48,7 @@ pip install -r requirements.txt
 python generate_invitation_video.py
 ```
 
-Generation takes about 2–3 minutes. The script renders six animated scenes with maroon/gold/cream styling, elegant typography, subtle ambient audio, and a final reveal of the original invitation artwork.
+Generation takes about 1–2 minutes. The script animates the invitation card in one frame with Ken Burns motion, golden shimmer, sparkles, and ambient audio.
 
 ## Project Structure
 
