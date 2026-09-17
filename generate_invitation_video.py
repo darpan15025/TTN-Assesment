@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a Ring Ceremony invitation video with animation in a single frame."""
+"""Generate a rich single-frame Ring Ceremony invitation video."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from moviepy import AudioFileClip, VideoClip
 
 ROOT = Path(__file__).resolve().parent
@@ -21,120 +21,277 @@ OUTPUT_MOBILE = OUTPUT_DIR / "ring_ceremony_invitation_mobile.mp4"
 BG_MUSIC = ASSETS / "bg_music.wav"
 
 WIDTH, HEIGHT = 1080, 1920
-FPS = 30
+FPS = 24
 DURATION = 20.0
 
+MAROON = (92, 18, 38)
+MAROON_LIGHT = (123, 30, 58)
 GOLD = (212, 175, 55)
-GOLD_PALE = (245, 228, 170)
+GOLD_LIGHT = (245, 215, 120)
+GOLD_PALE = (255, 236, 190)
+ROSE = (170, 28, 52)
+ROSE_PALE = (220, 120, 130)
+CREAM = (245, 232, 210)
 
 
 def clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
-def ease_in_out_sine(t: float) -> float:
-    return -(math.cos(math.pi * t) - 1) / 2
-
-
 def ease_out_cubic(t: float) -> float:
     return 1 - (1 - t) ** 3
 
 
-def fit_cover(image: Image.Image, width: int, height: int) -> Image.Image:
+def lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+
+def fit_contain(image: Image.Image, width: int, height: int) -> Image.Image:
     src_w, src_h = image.size
-    scale = max(width / src_w, height / src_h)
+    scale = min(width / src_w, height / src_h)
     new_size = (int(src_w * scale), int(src_h * scale))
     resized = image.resize(new_size, Image.Resampling.LANCZOS)
-    left = (new_size[0] - width) // 2
-    top = (new_size[1] - height) // 2
-    return resized.crop((left, top, left + width, top + height))
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    canvas.paste(resized, ((width - new_size[0]) // 2, (height - new_size[1]) // 2))
+    return canvas
 
 
-def build_sparkles(count: int, seed: int = 7) -> list[dict]:
+def build_particles(seed: int = 11) -> tuple[list[dict], list[dict], list[dict]]:
     rng = random.Random(seed)
-    sparkles = []
-    for _ in range(count):
-        sparkles.append(
+    petals, bokeh, sparkles = [], [], []
+    for _ in range(36):
+        petals.append(
             {
-                "x": rng.uniform(0.08, 0.92),
-                "y": rng.uniform(0.05, 0.95),
-                "size": rng.uniform(1.5, 4.5),
+                "x": rng.uniform(0.0, 1.0),
+                "y": rng.uniform(-0.2, 1.1),
+                "size": rng.uniform(8, 18),
+                "speed": rng.uniform(0.02, 0.06),
+                "sway": rng.uniform(0.5, 1.5),
                 "phase": rng.uniform(0, math.tau),
-                "speed": rng.uniform(0.8, 2.2),
-                "drift": rng.uniform(0.004, 0.015),
+                "color": rng.choice([ROSE, ROSE_PALE, GOLD_PALE, CREAM, (255, 210, 210)]),
             }
         )
-    return sparkles
+    for _ in range(22):
+        bokeh.append(
+            {
+                "x": rng.uniform(0.03, 0.97),
+                "y": rng.uniform(0.03, 0.97),
+                "radius": rng.uniform(16, 52),
+                "phase": rng.uniform(0, math.tau),
+                "speed": rng.uniform(0.6, 1.4),
+            }
+        )
+    for _ in range(90):
+        sparkles.append(
+            {
+                "x": rng.uniform(0.0, 1.0),
+                "y": rng.uniform(0.0, 1.0),
+                "size": rng.uniform(2, 5),
+                "phase": rng.uniform(0, math.tau),
+                "speed": rng.uniform(1.0, 3.0),
+            }
+        )
+    return petals, bokeh, sparkles
 
 
-SPARKLES = build_sparkles(48)
-BASE_FRAME = fit_cover(Image.open(INVITATION_IMAGE).convert("RGB"), WIDTH, HEIGHT)
+def create_static_backdrop() -> Image.Image:
+    gradient = Image.new("RGB", (WIDTH, HEIGHT), MAROON)
+    draw = ImageDraw.Draw(gradient)
+    for y in range(0, HEIGHT, 2):
+        blend = y / HEIGHT
+        r = int(lerp(MAROON[0], MAROON_LIGHT[0], blend * 0.55))
+        g = int(lerp(MAROON[1], MAROON_LIGHT[1], blend * 0.55))
+        b = int(lerp(MAROON[2], MAROON_LIGHT[2], blend * 0.55))
+        draw.rectangle((0, y, WIDTH, y + 2), fill=(r, g, b))
+
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    tile = 80
+    for y in range(0, HEIGHT, tile):
+        for x in range(0, WIDTH, tile):
+            cx, cy = x + tile // 2, y + tile // 2
+            draw.pieslice((cx - 24, cy - 24, cx + 24, cy + 24), 210, 330, fill=(*GOLD, 18))
+            draw.ellipse((cx - 8, cy - 8, cx + 8, cy + 8), fill=(*GOLD_LIGHT, 12))
+
+    for i in range(8):
+        inset = 18 + i * 4
+        draw.rounded_rectangle(
+            (inset, inset, WIDTH - inset, HEIGHT - inset),
+            radius=34,
+            outline=(*GOLD, 130 - i * 12),
+            width=2,
+        )
+
+    glow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    glow_draw.ellipse((WIDTH // 2 - 420, 80, WIDTH // 2 + 420, 420), fill=(*GOLD, 45))
+    glow_draw.ellipse((WIDTH // 2 - 380, HEIGHT - 500, WIDTH // 2 + 380, HEIGHT - 120), fill=(*GOLD_LIGHT, 35))
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=30))
+
+    base = gradient.convert("RGBA")
+    base = Image.alpha_composite(base, overlay)
+    base = Image.alpha_composite(base, glow)
+    return base
+
+
+PETALS, BOKEH, SPARKLES = build_particles()
+STATIC_BACKDROP = create_static_backdrop()
+CARD_BASE = fit_contain(Image.open(INVITATION_IMAGE).convert("RGBA"), int(WIDTH * 0.88), int(HEIGHT * 0.82))
+OM_FONT = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSerifDevanagari-Bold.ttf", 88)
+
+
+def draw_corner_roses(draw: ImageDraw.ImageDraw, t: float) -> None:
+    corners = [(72, 96), (WIDTH - 72, 96), (72, HEIGHT - 110), (WIDTH - 72, HEIGHT - 110)]
+    for idx, (cx, cy) in enumerate(corners):
+        sway = math.sin(t * 1.5 + idx) * 5
+        for r in range(6):
+            angle = r * 60 + idx * 18 + t * 15
+            rad = math.radians(angle)
+            x = cx + math.cos(rad) * (24 + r * 5) + sway
+            y = cy + math.sin(rad) * (20 + r * 4)
+            size = 14 - r
+            draw.ellipse((x - size, y - size, x + size, y + size), fill=(*ROSE, 210))
+            draw.ellipse((x - size // 2, y - size // 2, x + size // 2, y + size // 2), fill=(*ROSE_PALE, 170))
+
+
+def draw_hanging_bells(draw: ImageDraw.ImageDraw, t: float) -> None:
+    for side in (-1, 1):
+        anchor_x = WIDTH // 2 + side * 420
+        for i in range(4):
+            swing = math.sin(t * 2.2 + i * 0.7) * 9
+            x = anchor_x + swing
+            y = 118 + i * 44
+            draw.line([(anchor_x, 92 if i == 0 else y - 18), (x, y - 8)], fill=(*GOLD, 210), width=2)
+            draw.ellipse((x - 10, y - 8, x + 10, y + 12), fill=(*GOLD_LIGHT, 230))
+            draw.arc((x - 8, y + 2, x + 8, y + 16), 190, 350, fill=(*GOLD, 255), width=2)
+
+
+def draw_light_rays(draw: ImageDraw.ImageDraw, t: float) -> None:
+    origin = (WIDTH // 2, 0)
+    for i in range(12):
+        spread = -48 + i * 8
+        angle = math.radians(-90 + spread + math.sin(t + i) * 3)
+        length = HEIGHT * 0.72
+        end = (origin[0] + math.cos(angle) * length, origin[1] + math.sin(angle) * length)
+        alpha = int(14 + 10 * math.sin(t * 1.5 + i * 0.5))
+        draw.line([origin, end], fill=(*GOLD_PALE, alpha), width=5)
+
+
+def draw_card_layer(t: float) -> Image.Image:
+    card_w, card_h = CARD_BASE.size
+    pulse = 1.0 + 0.01 * math.sin(t * 2.4)
+    scaled_w, scaled_h = int(card_w * pulse), int(card_h * pulse)
+    card = CARD_BASE.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
+    x = (WIDTH - scaled_w) // 2
+    y = (HEIGHT - scaled_h) // 2 + 20
+
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    shadow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_draw.rounded_rectangle((x + 8, y + 14, x + scaled_w + 8, y + scaled_h + 14), radius=28, fill=(20, 0, 8, 130))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=12))
+    layer = Image.alpha_composite(layer, shadow)
+
+    frame_draw = ImageDraw.Draw(layer)
+    pad = 12
+    glow_alpha = int(190 + 45 * math.sin(t * 2))
+    frame_draw.rounded_rectangle((x - pad, y - pad, x + scaled_w + pad, y + scaled_h + pad), radius=30, outline=(*GOLD, glow_alpha), width=5)
+    frame_draw.rounded_rectangle((x - pad - 7, y - pad - 7, x + scaled_w + pad + 7, y + scaled_h + pad + 7), radius=34, outline=(*GOLD_LIGHT, int(glow_alpha * 0.6)), width=2)
+    layer.paste(card, (x, y), card)
+    return layer
+
+
+def draw_foreground(draw: ImageDraw.ImageDraw, t: float, progress: float) -> None:
+    for b in BOKEH:
+        twinkle = 0.45 + 0.55 * abs(math.sin(t * b["speed"] + b["phase"]))
+        radius = b["radius"] * (0.85 + 0.25 * twinkle)
+        x = b["x"] * WIDTH + math.sin(t * 0.7 + b["phase"]) * 12
+        y = b["y"] * HEIGHT + math.cos(t * 0.6 + b["phase"]) * 12
+        alpha = int(55 * twinkle * ease_out_cubic(progress))
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(*GOLD_LIGHT, alpha))
+
+    for petal in PETALS:
+        y = (petal["y"] + t * petal["speed"]) % 1.2 - 0.1
+        x = petal["x"] * WIDTH + math.sin(t * petal["sway"] + petal["phase"]) * 36
+        alpha = int(180 * ease_out_cubic(min(1.0, progress * 1.4)))
+        size = petal["size"]
+        draw.ellipse((x - size, y * HEIGHT - size * 0.5, x + size, y * HEIGHT + size * 0.5), fill=(*petal["color"], alpha))
+        draw.ellipse((x - size * 0.5, y * HEIGHT - size, x + size * 0.5, y * HEIGHT + size), fill=(*petal["color"], int(alpha * 0.8)))
+
+    for sparkle in SPARKLES:
+        twinkle = abs(math.sin(t * sparkle["speed"] + sparkle["phase"])) ** 2
+        alpha = int(230 * twinkle * ease_out_cubic(progress))
+        if alpha < 25:
+            continue
+        x = sparkle["x"] * WIDTH + math.sin(t + sparkle["phase"]) * 6
+        y = sparkle["y"] * HEIGHT + math.cos(t * 1.2 + sparkle["phase"]) * 6
+        size = sparkle["size"] * (1.2 + twinkle)
+        if twinkle > 0.7:
+            draw.line([(x - size, y), (x + size, y)], fill=(*GOLD_PALE, alpha), width=2)
+            draw.line([(x, y - size), (x, y + size)], fill=(*GOLD_PALE, alpha), width=2)
+        draw.ellipse((x, y, x + size * 0.6, y + size * 0.6), fill=(*GOLD, alpha))
+
+    shimmer_x = int((t * 130) % (WIDTH + 500)) - 250
+    for offset in range(-90, 120, 18):
+        alpha = int(32 + 16 * math.sin(t * 2.5))
+        draw.polygon(
+            [
+                (shimmer_x + offset, 0),
+                (shimmer_x + offset + 55, 0),
+                (shimmer_x + offset + 200, HEIGHT),
+                (shimmer_x + offset + 95, HEIGHT),
+            ],
+            fill=(*GOLD_PALE, alpha),
+        )
+
+    diya_x, diya_y = int(WIDTH * 0.16), int(HEIGHT * 0.845)
+    flame_h = 14 + 7 * abs(math.sin(t * 9))
+    draw.ellipse((diya_x - 16, diya_y - 8, diya_x + 16, diya_y + 8), fill=(*GOLD, 190))
+    draw.ellipse((diya_x - 7, diya_y - flame_h - 6, diya_x + 7, diya_y + 3), fill=(255, 190, 60, 230))
+
+    ring_x, ring_y = int(WIDTH * 0.74), int(HEIGHT * 0.825)
+    ring_alpha = int(90 + 110 * (0.5 + 0.5 * math.sin(t * 3)))
+    draw.ellipse((ring_x - 32, ring_y - 32, ring_x + 4, ring_y + 4), outline=(*GOLD, ring_alpha), width=4)
+    draw.ellipse((ring_x - 8, ring_y - 42, ring_x + 28, ring_y - 4), outline=(*GOLD_LIGHT, ring_alpha), width=4)
 
 
 def render_single_frame(t: float) -> np.ndarray:
     progress = clamp01(t / DURATION)
+    frame = STATIC_BACKDROP.copy()
 
-    zoom = 1.0 + 0.045 * ease_in_out_sine(progress)
-    pan_x = math.sin(progress * math.pi * 2) * 8
-    pan_y = math.cos(progress * math.pi * 1.5) * 6
+    rays = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw_light_rays(ImageDraw.Draw(rays), t)
+    rays = rays.filter(ImageFilter.GaussianBlur(radius=5))
+    frame = Image.alpha_composite(frame, rays)
 
-    w, h = BASE_FRAME.size
-    crop_w = int(WIDTH / zoom)
-    crop_h = int(HEIGHT / zoom)
-    left = int((w - crop_w) / 2 + pan_x)
-    top = int((h - crop_h) / 2 + pan_y)
-    left = max(0, min(w - crop_w, left))
-    top = max(0, min(h - crop_h, top))
+    decor = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    decor_draw = ImageDraw.Draw(decor)
+    draw_corner_roses(decor_draw, t)
+    draw_hanging_bells(decor_draw, t)
+    frame = Image.alpha_composite(frame, decor)
 
-    frame = BASE_FRAME.crop((left, top, left + crop_w, top + crop_h)).resize(
-        (WIDTH, HEIGHT), Image.Resampling.LANCZOS
-    )
+    om_layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    om_draw = ImageDraw.Draw(om_layer)
+    text = "ॐ"
+    alpha = int(255 * ease_out_cubic(min(1.0, progress * 1.8)))
+    bbox = om_draw.textbbox((0, 0), text, font=OM_FONT)
+    x = (WIDTH - (bbox[2] - bbox[0])) // 2
+    y = 36 + math.sin(t * 1.5) * 3
+    om_draw.text((x, y), text, font=OM_FONT, fill=(*GOLD_LIGHT, alpha))
+    om_layer = om_layer.filter(ImageFilter.GaussianBlur(radius=1.2))
+    frame = Image.alpha_composite(frame, om_layer)
 
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    frame = Image.alpha_composite(frame, draw_card_layer(t))
 
-    shimmer_x = int((progress * 1.4) % 1.0 * (WIDTH + 400)) - 200
-    shimmer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    shimmer_draw = ImageDraw.Draw(shimmer)
-    for offset in range(-80, 120, 18):
-        alpha = int(18 + 12 * math.sin(progress * math.pi * 4))
-        shimmer_draw.polygon(
-            [
-                (shimmer_x + offset, 0),
-                (shimmer_x + offset + 50, 0),
-                (shimmer_x + offset + 180, HEIGHT),
-                (shimmer_x + offset + 90, HEIGHT),
-            ],
-            fill=(*GOLD_PALE, alpha),
-        )
-    shimmer = shimmer.filter(ImageFilter.GaussianBlur(radius=18))
-    overlay = Image.alpha_composite(overlay, shimmer)
+    fx = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw_foreground(ImageDraw.Draw(fx), t, progress)
+    fx = fx.filter(ImageFilter.GaussianBlur(radius=1.1))
+    frame = Image.alpha_composite(frame, fx)
 
-    glow_alpha = int(22 + 18 * math.sin(progress * math.pi * 3))
-    draw.ellipse((WIDTH // 2 - 280, 120, WIDTH // 2 + 280, 520), fill=(*GOLD, glow_alpha))
-
-    ring_pulse = 0.5 + 0.5 * math.sin(progress * math.pi * 2.5)
-    ring_alpha = int(40 + 80 * ring_pulse)
-    cx, cy = WIDTH // 2 + 40, int(HEIGHT * 0.78)
-    draw.ellipse((cx - 52, cy - 52, cx - 2, cy - 2), outline=(*GOLD, ring_alpha), width=3)
-    draw.ellipse((cx - 12, cy - 62, cx + 38, cy - 12), outline=(*GOLD_PALE, ring_alpha), width=3)
-
-    for sparkle in SPARKLES:
-        twinkle = 0.35 + 0.65 * abs(math.sin(t * sparkle["speed"] + sparkle["phase"]))
-        alpha = int(180 * twinkle * ease_out_cubic(min(1.0, progress * 2)))
-        if alpha < 8:
-            continue
-        x = int(sparkle["x"] * WIDTH + math.sin(t + sparkle["phase"]) * 12)
-        y = int(sparkle["y"] * HEIGHT - t * sparkle["drift"] * HEIGHT) % HEIGHT
-        size = sparkle["size"] * (0.8 + 0.4 * twinkle)
-        draw.ellipse((x, y, x + size, y + size), fill=(*GOLD_PALE, alpha))
-
-    vignette_strength = int(28 + 10 * math.sin(progress * math.pi))
-    draw.rectangle((0, 0, WIDTH, HEIGHT), fill=(35, 8, 18, vignette_strength))
-
-    frame_rgba = frame.convert("RGBA")
-    frame_rgba = Image.alpha_composite(frame_rgba, overlay)
-    return np.array(frame_rgba.convert("RGB"))
+    vignette = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    ImageDraw.Draw(vignette).rectangle((0, 0, WIDTH, HEIGHT), fill=(35, 8, 18, 34))
+    frame = Image.alpha_composite(frame, vignette)
+    return np.array(frame.convert("RGB"))
 
 
 def generate_background_music() -> None:
@@ -186,27 +343,21 @@ def compress_mobile(source: Path, target: Path) -> None:
 def build_video() -> tuple[Path, Path]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     generate_background_music()
-
-    def frame_at(t: float) -> np.ndarray:
-        return render_single_frame(t)
-
-    video = VideoClip(frame_at, duration=DURATION).with_fps(FPS)
+    video = VideoClip(lambda t: render_single_frame(t), duration=DURATION).with_fps(FPS)
     audio = AudioFileClip(str(BG_MUSIC)).with_duration(DURATION)
     video = video.with_audio(audio)
-
     video.write_videofile(
         str(OUTPUT_VIDEO),
         fps=FPS,
         codec="libx264",
         audio_codec="aac",
         preset="medium",
-        bitrate="5000k",
+        bitrate="6000k",
         ffmpeg_params=["-pix_fmt", "yuv420p", "-movflags", "+faststart"],
         logger=None,
     )
     video.close()
     audio.close()
-
     compress_mobile(OUTPUT_VIDEO, OUTPUT_MOBILE)
     return OUTPUT_VIDEO, OUTPUT_MOBILE
 
