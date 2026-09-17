@@ -15,6 +15,7 @@ from moviepy import AudioFileClip, VideoClip
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "assets"
 FONTS = ASSETS / "fonts"
+INVITATION_IMAGE = ASSETS / "invitation_source.jpg"
 OUTPUT_DIR = ROOT / "output"
 OUTPUT_VIDEO = OUTPUT_DIR / "ring_ceremony_invitation.mp4"
 OUTPUT_MOBILE = OUTPUT_DIR / "ring_ceremony_invitation_mobile.mp4"
@@ -34,6 +35,7 @@ ROSE_PALE = (220, 120, 130)
 CREAM = (245, 232, 210)
 TEXT_DARK = (74, 34, 34)
 TEXT_MUTED = (110, 72, 72)
+TEAL = (32, 110, 112)
 
 PANEL = (58, 140, WIDTH - 58, HEIGHT - 140)
 PANEL_W = PANEL[2] - PANEL[0]
@@ -170,6 +172,126 @@ def create_static_backdrop() -> Image.Image:
 
 
 STATIC_BACKDROP = create_static_backdrop()
+
+
+def prepare_invitation_art() -> dict[str, Image.Image]:
+    inv = Image.open(INVITATION_IMAGE).convert("RGBA")
+    iw, ih = inv.size
+    top = inv.crop((int(iw * 0.04), 0, int(iw * 0.96), int(ih * 0.13)))
+    bottom = inv.crop((0, int(ih * 0.72), iw, ih))
+    left = inv.crop((0, int(ih * 0.12), int(iw * 0.17), int(ih * 0.88)))
+    right = inv.crop((int(iw * 0.83), int(ih * 0.12), iw, int(ih * 0.88)))
+    paisley_tile = inv.crop((int(iw * 0.02), int(ih * 0.28), int(iw * 0.16), int(ih * 0.42)))
+
+    top_h = int(PANEL_W * top.height / top.width * 0.75)
+    bottom_h = int(PANEL_W * bottom.height / bottom.width * 0.58)
+    side_w = int(PANEL_W * 0.11)
+    tile = paisley_tile.resize((120, 120), Image.Resampling.LANCZOS)
+
+    return {
+        "top": top.resize((PANEL_W, top_h), Image.Resampling.LANCZOS),
+        "bottom": bottom.resize((PANEL_W, bottom_h), Image.Resampling.LANCZOS),
+        "left": left.resize((side_w, int((PANEL[3] - PANEL[1]) * 0.72)), Image.Resampling.LANCZOS),
+        "right": right.resize((side_w, int((PANEL[3] - PANEL[1]) * 0.72)), Image.Resampling.LANCZOS),
+        "tile": tile,
+    }
+
+
+INVITATION_ART = prepare_invitation_art()
+
+
+def draw_panel_rich_fill(base: Image.Image, prc: tuple[int, int, int, int], t: float, alpha: int) -> Image.Image:
+    pl, pt, pr, pb = prc
+    pw, ph = pr - pl, pb - pt
+    panel_img = base.copy()
+
+    tile = INVITATION_ART["tile"]
+    tiled = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
+    for yy in range(0, ph, tile.height):
+        for xx in range(0, pw, tile.width):
+            ghost = tile.copy()
+            ghost.putalpha(28)
+            tiled.paste(ghost, (xx, yy), ghost)
+    panel_img.paste(tiled, (pl, pt), tiled)
+
+    paisley = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(paisley)
+    for yy in range(0, ph, 52):
+        for xx in range(0, pw, 52):
+            cx, cy = xx + 26, yy + 26
+            a = 16 + int(8 * math.sin(t * 1.2 + xx * 0.01 + yy * 0.01))
+            pd.pieslice((cx - 16, cy - 16, cx + 16, cy + 16), 210, 330, fill=(*TEAL, a))
+            pd.ellipse((cx - 5, cy - 5, cx + 5, cy + 5), fill=(*GOLD, a + 8))
+    panel_img.paste(paisley, (pl, pt), paisley)
+
+    left = INVITATION_ART["left"].copy()
+    right = INVITATION_ART["right"].copy()
+    left.putalpha(int(alpha * 0.88))
+    right.putalpha(int(alpha * 0.88))
+    panel_img.paste(left, (pl + 6, pt + int(ph * 0.13)), left)
+    panel_img.paste(right, (pr - right.width - 6, pt + int(ph * 0.13)), right)
+
+    top = INVITATION_ART["top"].copy()
+    top.putalpha(int(alpha * 0.94))
+    panel_img.paste(top, (pl + (pw - top.width) // 2, pt - int(top.height * 0.16)), top)
+
+    bottom = INVITATION_ART["bottom"].copy()
+    bottom.putalpha(int(alpha * 0.96))
+    by = pb - bottom.height + 6
+    panel_img.paste(bottom, (pl + (pw - bottom.width) // 2, by), bottom)
+
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.rounded_rectangle((pl + 10, pt + 10, pr - 10, pb - 10), radius=26, outline=(*GOLD, int(120 + 40 * math.sin(t * 2))), width=2)
+    od.line([(pl + 28, by - 6), (pr - 28, by - 6)], fill=(*GOLD, 100), width=2)
+    return Image.alpha_composite(panel_img, overlay)
+
+
+def draw_panel_corner_flowers(base: Image.Image, prc: tuple[int, int, int, int], t: float) -> Image.Image:
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    pl, pt, pr, pb = prc
+    corners = [(pl + 34, pt + 130), (pr - 34, pt + 130), (pl + 34, pb - 140), (pr - 34, pb - 140)]
+    for idx, (cx, cy) in enumerate(corners):
+        sway = math.sin(t * 1.4 + idx) * 4
+        for r in range(8):
+            ang = math.radians(r * 45 + idx * 22 + t * 12)
+            dist = 15 + r * 4
+            x = cx + math.cos(ang) * dist + sway
+            y = cy + math.sin(ang) * (dist * 0.82)
+            sz = max(4, 12 - r)
+            draw.ellipse((x - sz, y - sz, x + sz, y + sz), fill=(*ROSE, 220))
+            if r % 2 == 0:
+                draw.ellipse((x - 3, y - 3, x + 3, y + 3), fill=(255, 255, 255, 180))
+    return Image.alpha_composite(base, layer)
+
+
+def draw_footer_ornaments(draw: ImageDraw.ImageDraw, prc: tuple[int, int, int, int], t: float, alpha: int) -> None:
+    pl, pt, pr, pb = prc
+    base_y = pb - 108
+    dx = pl + 92
+    dy = base_y + 8
+    flame = 12 + 8 * abs(math.sin(t * 10))
+    draw.ellipse((dx - 22, dy, dx + 22, dy + 22), fill=(*GOLD, alpha))
+    draw.polygon([(dx - 16, dy + 2), (dx + 16, dy + 2), (dx + 24, dy + 20), (dx - 24, dy + 20)], fill=(*GOLD_LIGHT, alpha))
+    draw.ellipse((dx - 7, dy - flame, dx + 7, dy + 4), fill=(255, 180, 50, alpha))
+    for px in (dx - 28, dx - 8, dx + 14, dx + 32):
+        draw.ellipse((px - 5, dy + 24, px + 5, dy + 30), fill=(*ROSE, int(alpha * 0.85)))
+
+    rx, ry = pr - 125, base_y + 10
+    rot = t * 15
+    for i, (ox, oy, r) in enumerate([(0, 0, 21), (15, -9, 18)]):
+        ang = math.radians(rot + i * 24)
+        rcx = rx + ox + math.cos(ang) * 2
+        rcy = ry + oy + math.sin(ang) * 2
+        draw.ellipse((rcx - r, rcy - r, rcx + r, rcy + r), outline=(*GOLD, alpha), width=4)
+
+    fx = (pl + pr) // 2
+    for i in range(7):
+        x = fx - 84 + i * 24 + math.sin(t * 2 + i) * 3
+        h = 32 + i * 4
+        c = [(20, 130, 80), (30, 90, 150), (15, 110, 70)][i % 3]
+        draw.line([(x, base_y + 20), (x + 8, base_y + 20 - h)], fill=(*c, alpha), width=3)
 
 
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
@@ -399,6 +521,8 @@ def draw_invitation_panel(t: float) -> Image.Image:
         spark_a = int(180 * abs(math.sin(t * 3 + corner[0])))
         pd.ellipse((corner[0] - 6, corner[1] - 6, corner[0] + 6, corner[1] + 6), fill=(*GOLD_LIGHT, spark_a))
     layer = Image.alpha_composite(layer, panel_img)
+    layer = draw_panel_rich_fill(layer, prc, t, panel_alpha)
+    layer = draw_panel_corner_flowers(layer, prc, t)
 
     if panel_in < 0.05:
         return layer
@@ -454,12 +578,7 @@ def draw_invitation_panel(t: float) -> Image.Image:
     hero_bottom = n2_bb[3]
 
     glow_layer = draw_hero_glow(Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)), hero_top, hero_bottom, t, hero_in)
-    ring_layer = draw_animated_rings(
-        Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)),
-        WIDTH // 2 + 180, hero_top + (hero_bottom - hero_top) // 2, t, int(190 * hero_in),
-    )
     content = Image.alpha_composite(content, glow_layer)
-    content = Image.alpha_composite(content, ring_layer)
     draw = ImageDraw.Draw(content)
 
     y = hero_bottom + 12
@@ -509,7 +628,8 @@ def draw_invitation_panel(t: float) -> Image.Image:
     stw, sth = text_size("With Love,", FONTS_CACHE["sign"])
     draw.text((PANEL[0] + (PANEL_W - stw) // 2, y), "With Love,", font=FONTS_CACHE["sign"], fill=(*TEXT_MUTED, ca))
     y += sth + 2
-    draw_text_centered(draw, "Goel Family", y + 18, FONTS_CACHE["family"], (*MAROON_LIGHT, ca))
+    draw_text_centered(draw, "Goel Family", y + 12, FONTS_CACHE["family"], (*MAROON_LIGHT, ca))
+    draw_footer_ornaments(draw, prc, t, int(220 * ease_out_cubic(min(1.0, prog * 1.2))))
 
     layer = Image.alpha_composite(layer, content)
     return layer
