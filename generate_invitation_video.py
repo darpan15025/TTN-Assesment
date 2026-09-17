@@ -14,6 +14,7 @@ from moviepy import AudioFileClip, VideoClip
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "assets"
+FONTS = ASSETS / "fonts"
 INVITATION_IMAGE = ASSETS / "invitation_source.jpg"
 OUTPUT_DIR = ROOT / "output"
 OUTPUT_VIDEO = OUTPUT_DIR / "ring_ceremony_invitation.mp4"
@@ -32,6 +33,19 @@ GOLD_PALE = (255, 236, 190)
 ROSE = (170, 28, 52)
 ROSE_PALE = (220, 120, 130)
 CREAM = (245, 232, 210)
+TEXT_DARK = (74, 34, 34)
+TEXT_MUTED = (110, 72, 72)
+
+FONT_MAP = {
+    "great-vibes": "GreatVibes-Regular.ttf",
+    "cinzel": "Cinzel.ttf",
+    "cormorant": "CormorantGaramond.ttf",
+    "cormorant-italic": "CormorantGaramond-Italic.ttf",
+}
+
+
+def load_font(key: str, size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(str(FONTS / FONT_MAP[key]), size)
 
 
 def clamp01(value: float) -> float:
@@ -136,8 +150,238 @@ def create_static_backdrop() -> Image.Image:
 
 PETALS, BOKEH, SPARKLES = build_particles()
 STATIC_BACKDROP = create_static_backdrop()
-CARD_BASE = fit_contain(Image.open(INVITATION_IMAGE).convert("RGBA"), int(WIDTH * 0.88), int(HEIGHT * 0.82))
-OM_FONT = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSerifDevanagari-Bold.ttf", 88)
+OM_FONT = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSerifDevanagari-Bold.ttf", 72)
+
+
+def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if font.getbbox(candidate)[2] - font.getbbox(candidate)[0] <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def draw_centered_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    y: int,
+    font: ImageFont.FreeTypeFont,
+    fill: tuple[int, int, int, int],
+    panel_left: int,
+    panel_width: int,
+) -> int:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    x = panel_left + (panel_width - tw) // 2
+    draw.text((x, y), text, font=font, fill=fill)
+    return y + th
+
+
+def draw_centered_lines(
+    draw: ImageDraw.ImageDraw,
+    lines: list[str],
+    y: int,
+    font: ImageFont.FreeTypeFont,
+    fill: tuple[int, int, int, int],
+    panel_left: int,
+    panel_width: int,
+    spacing: float = 1.35,
+) -> int:
+    line_h = int((font.getbbox("Ay")[3] - font.getbbox("Ay")[1]) * spacing)
+    for line in lines:
+        bbox = draw.textbbox((0, 0), line, font=font)
+        tw = bbox[2] - bbox[0]
+        x = panel_left + (panel_width - tw) // 2
+        draw.text((x, y), line, font=font, fill=fill)
+        y += line_h
+    return y
+
+
+def draw_invitation_panel(t: float, progress: float) -> Image.Image:
+    panel_left, panel_top = 72, 210
+    panel_right, panel_bottom = WIDTH - 72, HEIGHT - 210
+    panel_width = panel_right - panel_left
+
+    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    shadow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_draw.rounded_rectangle(
+        (panel_left + 8, panel_top + 14, panel_right + 8, panel_bottom + 14),
+        radius=34,
+        fill=(20, 0, 8, 130),
+    )
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=14))
+    layer = Image.alpha_composite(layer, shadow)
+
+    panel = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    panel_draw = ImageDraw.Draw(panel)
+    panel_alpha = int(245 * ease_out_cubic(min(1.0, progress * 2.5)))
+    panel_draw.rounded_rectangle(
+        (panel_left, panel_top, panel_right, panel_bottom),
+        radius=34,
+        fill=(*CREAM, panel_alpha),
+    )
+    glow_alpha = int(180 + 45 * math.sin(t * 2))
+    panel_draw.rounded_rectangle(
+        (panel_left + 14, panel_top + 14, panel_right - 14, panel_bottom - 14),
+        radius=28,
+        outline=(*GOLD, glow_alpha),
+        width=3,
+    )
+    layer = Image.alpha_composite(layer, panel)
+
+    content = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(content)
+    text_alpha = int(255 * ease_out_cubic(min(1.0, progress * 2.2)))
+    y = panel_top + 36
+
+    om_bbox = draw.textbbox((0, 0), "ॐ", font=OM_FONT)
+    om_x = panel_left + (panel_width - (om_bbox[2] - om_bbox[0])) // 2
+    draw.text((om_x, y), "ॐ", font=OM_FONT, fill=(*GOLD, text_alpha))
+    y += 82
+
+    quote_font = load_font("cormorant-italic", 30)
+    y = draw_centered_lines(
+        draw,
+        wrap_text("Two hearts, one journey, a lifetime of togetherness...", quote_font, panel_width - 80),
+        y,
+        quote_font,
+        (*TEXT_MUTED, text_alpha),
+        panel_left,
+        panel_width,
+        1.3,
+    )
+    y += 18
+
+    intro_font = load_font("cormorant", 28)
+    y = draw_centered_lines(
+        draw,
+        wrap_text(
+            "With the blessings of our families, we cordially invite you to the",
+            intro_font,
+            panel_width - 80,
+        ),
+        y,
+        intro_font,
+        (*TEXT_DARK, text_alpha),
+        panel_left,
+        panel_width,
+        1.28,
+    )
+    y += 10
+
+    title_font = load_font("great-vibes", 88)
+    title_glow = int(40 + 25 * math.sin(t * 2.2))
+    y = draw_centered_text(draw, "Ring Ceremony", y, title_font, (*MAROON_LIGHT, text_alpha), panel_left, panel_width)
+    y += 8
+    draw.rounded_rectangle(
+        (panel_left + 120, y - 4, panel_right - 120, y + 4),
+        radius=4,
+        fill=(*GOLD, title_glow),
+    )
+    y += 18
+
+    of_font = load_font("cinzel", 30)
+    y = draw_centered_text(draw, "of", y, of_font, (*TEXT_DARK, text_alpha), panel_left, panel_width)
+    y += 8
+
+    name_font = load_font("great-vibes", 72)
+    name_pulse = int(255 * (0.92 + 0.08 * math.sin(t * 2.5)))
+    y = draw_centered_text(draw, "Tanya Goel", y, name_font, (*MAROON_LIGHT, min(text_alpha, name_pulse)), panel_left, panel_width)
+    y += 4
+
+    amp_font = load_font("cinzel", 34)
+    y = draw_centered_text(draw, "&", y, amp_font, (*GOLD, text_alpha), panel_left, panel_width)
+    y += 2
+
+    y = draw_centered_text(draw, "Prabhat Goel", y, name_font, (*MAROON_LIGHT, min(text_alpha, name_pulse)), panel_left, panel_width)
+    y += 20
+
+    msg_font = load_font("cormorant-italic", 26)
+    y = draw_centered_lines(
+        draw,
+        wrap_text(
+            "As we begin this beautiful journey of love and togetherness, "
+            "we would be delighted to have you grace the occasion with your presence and blessings.",
+            msg_font,
+            panel_width - 70,
+        ),
+        y,
+        msg_font,
+        (*TEXT_MUTED, text_alpha),
+        panel_left,
+        panel_width,
+        1.32,
+    )
+    y += 16
+
+    detail_font = load_font("cormorant", 24)
+    label_font = load_font("cinzel", 20)
+    col_w = panel_width // 3
+    details = [
+        ("DATE", "Saturday,\n24 October"),
+        ("TIME", "11:00 AM"),
+        ("VENUE", "The Tonight Rooms\nand Party Hall,\nRailway Road, Hapur"),
+    ]
+    for idx, (label, value) in enumerate(details):
+        cx = panel_left + col_w * idx + col_w // 2
+        box_left = panel_left + col_w * idx + 12
+        box_right = panel_left + col_w * (idx + 1) - 12
+        draw.rounded_rectangle(
+            (box_left, y, box_right, y + 150),
+            radius=16,
+            fill=(255, 255, 255, int(text_alpha * 0.85)),
+            outline=(*GOLD, int(text_alpha * 0.8)),
+            width=2,
+        )
+        label_bbox = draw.textbbox((0, 0), label, font=label_font)
+        draw.text(
+            (cx - (label_bbox[2] - label_bbox[0]) // 2, y + 14),
+            label,
+            font=label_font,
+            fill=(*MAROON_LIGHT, text_alpha),
+        )
+        vy = y + 48
+        for line in value.split("\n"):
+            bbox = draw.textbbox((0, 0), line, font=detail_font)
+            draw.text(
+                (cx - (bbox[2] - bbox[0]) // 2, vy),
+                line,
+                font=detail_font,
+                fill=(*TEXT_DARK, text_alpha),
+            )
+            vy += 28
+
+    y += 168
+    close_font = load_font("cormorant", 28)
+    y = draw_centered_lines(
+        draw,
+        wrap_text("Your presence will make our celebration even more special.", close_font, panel_width - 70),
+        y,
+        close_font,
+        (*TEXT_DARK, text_alpha),
+        panel_left,
+        panel_width,
+        1.35,
+    )
+    y += 8
+    sign_font = load_font("cormorant-italic", 26)
+    y = draw_centered_text(draw, "With Love,", y, sign_font, (*TEXT_MUTED, text_alpha), panel_left, panel_width)
+    family_font = load_font("great-vibes", 58)
+    draw_centered_text(draw, "Goel Family", y, family_font, (*MAROON_LIGHT, text_alpha), panel_left, panel_width)
+
+    layer = Image.alpha_composite(layer, content)
+    return layer
 
 
 def draw_corner_roses(draw: ImageDraw.ImageDraw, t: float) -> None:
@@ -177,28 +421,8 @@ def draw_light_rays(draw: ImageDraw.ImageDraw, t: float) -> None:
         draw.line([origin, end], fill=(*GOLD_PALE, alpha), width=5)
 
 
-def draw_card_layer(t: float) -> Image.Image:
-    card_w, card_h = CARD_BASE.size
-    pulse = 1.0 + 0.01 * math.sin(t * 2.4)
-    scaled_w, scaled_h = int(card_w * pulse), int(card_h * pulse)
-    card = CARD_BASE.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
-    x = (WIDTH - scaled_w) // 2
-    y = (HEIGHT - scaled_h) // 2 + 20
-
-    layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    shadow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.rounded_rectangle((x + 8, y + 14, x + scaled_w + 8, y + scaled_h + 14), radius=28, fill=(20, 0, 8, 130))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=12))
-    layer = Image.alpha_composite(layer, shadow)
-
-    frame_draw = ImageDraw.Draw(layer)
-    pad = 12
-    glow_alpha = int(190 + 45 * math.sin(t * 2))
-    frame_draw.rounded_rectangle((x - pad, y - pad, x + scaled_w + pad, y + scaled_h + pad), radius=30, outline=(*GOLD, glow_alpha), width=5)
-    frame_draw.rounded_rectangle((x - pad - 7, y - pad - 7, x + scaled_w + pad + 7, y + scaled_h + pad + 7), radius=34, outline=(*GOLD_LIGHT, int(glow_alpha * 0.6)), width=2)
-    layer.paste(card, (x, y), card)
-    return layer
+def draw_invitation_panel_layer(t: float, progress: float) -> Image.Image:
+    return draw_invitation_panel(t, progress)
 
 
 def draw_foreground(draw: ImageDraw.ImageDraw, t: float, progress: float) -> None:
@@ -270,18 +494,7 @@ def render_single_frame(t: float) -> np.ndarray:
     draw_hanging_bells(decor_draw, t)
     frame = Image.alpha_composite(frame, decor)
 
-    om_layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    om_draw = ImageDraw.Draw(om_layer)
-    text = "ॐ"
-    alpha = int(255 * ease_out_cubic(min(1.0, progress * 1.8)))
-    bbox = om_draw.textbbox((0, 0), text, font=OM_FONT)
-    x = (WIDTH - (bbox[2] - bbox[0])) // 2
-    y = 36 + math.sin(t * 1.5) * 3
-    om_draw.text((x, y), text, font=OM_FONT, fill=(*GOLD_LIGHT, alpha))
-    om_layer = om_layer.filter(ImageFilter.GaussianBlur(radius=1.2))
-    frame = Image.alpha_composite(frame, om_layer)
-
-    frame = Image.alpha_composite(frame, draw_card_layer(t))
+    frame = Image.alpha_composite(frame, draw_invitation_panel_layer(t, progress))
 
     fx = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw_foreground(ImageDraw.Draw(fx), t, progress)
